@@ -85,7 +85,7 @@ export function AreaLine({
   const padding = Math.max(Math.abs(low), Math.abs(high), 1) * .005;
   const min = low - padding, max = high + padding;
   const xs = labels.map(
-    (_, i) => left + i * ((W - left - 12) / (labels.length - 1 || 1)),
+    (_, i) => labels.length === 1 ? (W + left) / 2 : left + i * ((W - left - 12) / (labels.length - 1 || 1)),
   );
   const y = (v: number) => 14 + (H - 14) * (1 - (v - min) / (max - min));
   const pts = values.map((v, i) => [xs[i], y(v)] as [number, number]);
@@ -93,7 +93,7 @@ export function AreaLine({
   const [selection, setSel] = useState(0);
   const sel = Math.min(Math.max(0, selection), Math.max(0, values.length - 1));
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => min + (max - min) * f);
-  if (!values.length || values.length !== labels.length) return <p className="tw-empty">No share-price history yet.</p>;
+  if (!values.length || values.length !== labels.length) return <p className="tw-empty">No pool activity yet</p>;
   return (
     <svg
       viewBox={`0 0 ${W} ${H + 30}`}
@@ -115,11 +115,11 @@ export function AreaLine({
           <line x1={left} x2={W} y1={y(t)} y2={y(t)} stroke="#f0f0f0" />
         </g>
       ))}
-      <path
+      {values.length >= 2 && <><path
         d={`${line} L${xs[xs.length - 1]},${H} L${xs[0]},${H} Z`}
         fill={`url(#a${id})`}
       />
-      <path d={line} fill="none" stroke="#00C08B" strokeWidth={2.2} />
+      <path d={line} fill="none" stroke="#00C08B" strokeWidth={2.2} /></>}
       {labels.map((l, i) => (
         <g
           key={l + i}

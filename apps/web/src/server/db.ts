@@ -2,12 +2,14 @@ import "server-only";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { migrateGuided } from "./guided/session-store";
 import { env } from "./env";
 import type { VerificationResult } from "./nearai/verify-flow";
 import { migrateAutomation } from "@tradewind/core/automation-store";
 import type { InvoiceTx, TxKind } from "@/lib/receipt-txs";
 export interface Draft { draft_id: string; exporter: string; doc_hash: string; text: string; shipping_text: string; extracted_json: string; created_at: number; expires_at: number }
 export function migrate(db: DatabaseSync) {
+  migrateGuided(db);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS accounts (near_account TEXT PRIMARY KEY, role_hint TEXT, display_name TEXT, country TEXT, created_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS drafts (draft_id TEXT PRIMARY KEY, exporter TEXT NOT NULL, doc_hash TEXT NOT NULL, text TEXT NOT NULL, shipping_text TEXT NOT NULL, extracted_json TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);

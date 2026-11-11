@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowUpRight, FileCheck2, Fingerprint, Banknote } from "lucide-react";
-import { data, isFixtureMode, network, contractHolder } from "@/lib/data";
+import { data, network, contractHolder } from "@/lib/data";
 import { TokenCard } from "@/components/invoice-panels";
-import { EmptyState } from "@/components/states";
+import { showcase } from "@/server/showcase";
 export default async function Landing() {
-  const invoice = await data().getInvoice("TW-0042");
-  const mainnetReady = !isFixtureMode() && network() === "mainnet";
-  return <div className="tw-landing tw-stack"><section className="tw-hero"><div className="tw-hero-copy"><img src="/brand/tradewind-logo-dark-bg.svg" alt="Tradewind" width="180" height="48" /><p className="tw-eyebrow">Working capital, without the wait</p><h1>Shipped today.<br /><em>Paid in 60 days.</em></h1><p className="tw-hero-sub">Get paid today for invoices your buyers pay in 60 days.</p><div className="tw-hero-actions"><Link href="/app" className="tw-button">Try the testnet sandbox <ArrowUpRight size={18} /></Link><Link href="/r/TW-0042" className="tw-hero-secondary">See real mainnet runs {!mainnetReady && <small>coming soon</small>}</Link></div><p className="tw-hero-note">On NEAR · documents checked privately · settlement from any chain</p></div><div className="tw-hero-visual">{invoice ? <TokenCard invoice={invoice} holder={invoice.advance && invoice.status !== "Repaid" ? contractHolder() : invoice.exporter} network={network()} /> : <EmptyState title="First run coming soon" />}</div></section>
+  const sample = await showcase();
+  const invoice = sample ? await data().getInvoice(sample.invoiceId).catch(() => null) : null;
+  return <div className="tw-landing tw-stack"><section className="tw-hero"><div className="tw-hero-copy"><img src="/brand/tradewind-logo-dark-bg.svg" alt="Tradewind" width="180" height="48" /><p className="tw-eyebrow">Working capital, without the wait</p><h1>Shipped today.<br /><em>Paid in 60 days.</em></h1><p className="tw-hero-sub">Get paid today for invoices your buyers pay in 60 days.</p><div className="tw-hero-actions"><Link href="/app" className="tw-button">Try the testnet sandbox <ArrowUpRight size={18} /></Link><Link href={sample ? `/r/${encodeURIComponent(sample.invoiceId)}` : "/app/guided"} className="tw-hero-secondary">{sample ? "See the sample receipt" : "Play both sides"}</Link></div><p className="tw-hero-note">On NEAR · documents checked privately · settlement from any chain</p></div><div className="tw-hero-visual">{invoice ? <TokenCard invoice={invoice} holder={invoice.advance && invoice.status !== "Repaid" ? contractHolder() : invoice.exporter} network={network()} /> : <article className="tw-card"><p className="tw-eyebrow">Run the demo</p><h2>See an invoice come full circle.</h2><p className="tw-muted">Create, accept, advance and repay a sample invoice. No wallet needed.</p><Link className="tw-button" href="/app/guided">Run the demo → Play both sides</Link></article>}</div></section>
     <section className="tw-explainer"><p className="tw-eyebrow">From goods shipped to cash in hand</p><h2>Your invoice. A shorter wait.</h2><div className="tw-row-3">{[
       { icon: FileCheck2, title: "Upload & AI check", body: "Invoice documents are checked privately by NEAR AI in a secure enclave." },
       { icon: Fingerprint, title: "Buyer accepts", body: "Your buyer confirms the terms. The invoice becomes an NFT on NEAR." },

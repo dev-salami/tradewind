@@ -43,6 +43,9 @@ export function automationStore(db: DatabaseSync) {
       db.prepare("INSERT INTO telegram_callbacks VALUES (?, ?, ?, ?, ?, ?, ?, NULL)").run(token, data.invoice_id, data.action, data.terms_hash, data.amount_e6, data.tg_user_id, now + 1_800_000); return token;
     },
     callback(token: string) { return db.prepare("SELECT * FROM telegram_callbacks WHERE token=?").get(token) as unknown as CallbackToken | undefined; },
+    revokeCallbacks(invoice_id: string, now = Date.now()) {
+      db.prepare("UPDATE telegram_callbacks SET used_at=? WHERE invoice_id=? AND used_at IS NULL").run(now, invoice_id);
+    },
     consumeCallback(token: string, user: string, now = Date.now()) {
       return db.prepare("UPDATE telegram_callbacks SET used_at=? WHERE token=? AND tg_user_id=? AND used_at IS NULL AND expires_at>? RETURNING *").get(now, token, user, now) as unknown as CallbackToken | undefined;
     },

@@ -1,4 +1,8 @@
 /** Wallet-selector FunctionCall actions. Amounts are integer base units, never floats. */
+import { explorerTx, type NearNetwork } from "@tradewind/core";
+export function receiptExplorer(network: NearNetwork, hash: string) {
+  return { hash, url: explorerTx(network, hash), label: network === "sandbox" ? "local sandbox" : "NearBlocks" };
+}
 export interface ContractTx { receiverId: string; actions: { type: "FunctionCall"; params: { methodName: string; args: Record<string, unknown>; gas: string; deposit: string } }[] }
 export const GAS = { call: "30000000000000", payout: "100000000000000", transfer: "150000000000000" } as const;
 export const CREATE_DEPOSIT = "50000000000000000000000";

@@ -42,3 +42,56 @@ export function explorerAccount(network: NearNetwork, account: string): string |
 export function explorerTx(network: NearNetwork, tx: string): string | null {
   return network === "sandbox" ? null : `https://${network === "testnet" ? "testnet." : ""}nearblocks.io/txns/${encodeURIComponent(tx)}`;
 }
+
+export interface RpcBlock { header: { height: number; hash: string; prev_height?: number; timestamp_nanosec: string }; chunks: { chunk_hash: string; height_included: number }[] }
+export interface RpcChunk { transactions: { hash: string; signer_id: string; receiver_id: string }[]; receipts: { receipt_id: string; receiver_id: string }[] }
+export interface RpcOutcome { id: string; block_hash: string; outcome: { executor_id: string; logs: string[]; status: Record<string, unknown> } }
+export interface RpcTxStatus { final_execution_status: string; transaction: { hash: string; signer_id: string }; transaction_outcome: RpcOutcome; receipts_outcome: RpcOutcome[] }
+export class RpcReadError extends Error {
+  constructor(public readonly detail: unknown) { super(`NEAR read failed: ${JSON.stringify(detail)}`); }
+}
+const cooldown = new Map<string, number>();
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+/** Read-only methods only. A shared per-endpoint cooldown also guards concurrent 429 retries. */
+export async function chainRpc<T>(url: string, method: "block" | "chunk" | "EXPERIMENTAL_tx_status" | "query", params: Record<string, unknown>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const wait = (cooldown.get(url) ?? 0) - Date.now();
+    if (wait > 0) await delay(wait);
+    try {
+      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "chain-read", method, params }), signal: AbortSignal.timeout(15_000) });
+      if (response.status === 429) {
+        const header = response.headers.get("retry-after");
+        const seconds = Number(header);
+        const retry = header && !Number.isFinite(seconds) ? Date.parse(header) - Date.now() : seconds * 1000;
+        cooldown.set(url, Date.now() + Math.min(60_000, Math.max(250 * 2 ** attempt, retry || 0)));
+      }
+      if (!response.ok) {
+        if (response.status !== 429 && response.status < 500) throw new RpcReadError({ http: response.status });
+        throw new Error(`NEAR RPC HTTP ${response.status}`);
+      }
+      const body = await response.json() as { result?: T; error?: unknown };
+      if (body.error) {
+        const detail = JSON.stringify(body.error);
+        if (/TOO_MANY_REQUESTS|rate.?limit|too many requests/i.test(detail)) {
+          cooldown.set(url, Date.now() + 250 * 2 ** attempt);
+          throw new Error(`NEAR RPC rate limited: ${detail}`);
+        }
+        if (method !== "EXPERIMENTAL_tx_status" && /TIMEOUT_ERROR|INTERNAL_ERROR/.test(detail)) throw new Error(`Transient NEAR RPC error: ${detail}`);
+        throw new RpcReadError(body.error);
+      }
+      if (body.result === undefined) throw new Error("Missing RPC result");
+      return body.result;
+    } catch (error) {
+      if (error instanceof RpcReadError || attempt >= 3) throw error;
+      await delay(250 * 2 ** attempt);
+    }
+  }
+}
+export const block = (url: string, at: "final" | "optimistic" | number | { block_id: string }) => chainRpc<RpcBlock>(url, "block", typeof at === "object" ? at : typeof at === "number" ? { block_id: at } : { finality: at });
+export const chunk = (url: string, chunk_hash: string) => chainRpc<RpcChunk>(url, "chunk", { chunk_id: chunk_hash });
+export const txStatus = (url: string, hash: string, sender: string) => chainRpc<RpcTxStatus>(url, "EXPERIMENTAL_tx_status", { tx_hash: hash, sender_account_id: sender, wait_until: "NONE" });
+/** Historical view, deliberately separate from the current-state viewFunction API. */
+export async function poolAtBlock(url: string, contract: string, height: number): Promise<Pool> {
+  const value = await chainRpc<{ result: number[] }>(url, "query", { request_type: "call_function", block_id: height, account_id: contract, method_name: "get_pool", args_base64: "e30=" });
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(value.result))) as Pool;
+}

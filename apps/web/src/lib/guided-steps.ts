@@ -7,6 +7,7 @@ export interface GuidedResult {
   step: GuidedStep;
   invoice_id?: string;
   tx_links: string[];
+  tx_hashes?: string[];
   verdict?: string;
   mock?: boolean;
   error?: string;
@@ -26,7 +27,10 @@ export function guidedAvailable(network: string, status: number, body: { availab
   return network !== "mainnet" && status >= 200 && status < 300 && body.available === true;
 }
 export function testnetTxLinks(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((link): link is string => typeof link === "string" && /^https:\/\/testnet\.nearblocks\.io\/txns\/[^/?#]+$/.test(link)) : [];
+  return Array.isArray(value) ? value.filter((link): link is string => typeof link === "string" && /^https:\/\/(testnet\.)?nearblocks\.io\/txns\/[^/?#]+$/.test(link)) : [];
+}
+export function guidedTxHashes(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((hash): hash is string => typeof hash === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(hash)) : [];
 }
 export function resumeGuided(storage: Pick<Storage, "getItem">): GuidedProgress {
   try {
@@ -39,6 +43,6 @@ export function resumeGuided(storage: Pick<Storage, "getItem">): GuidedProgress 
     if (p.invoice_id !== undefined && (typeof p.invoice_id !== "string" || !/^TW-\d{4,20}$/.test(p.invoice_id))) return emptyGuidedProgress();
     if (p.next > 0 && !p.invoice_id) return emptyGuidedProgress();
     if (p.results.some(r => !r || !GUIDED_STEPS.includes(r.step) || !Array.isArray(r.tx_links) || (r.error !== undefined && typeof r.error !== "string") || (r.verdict !== undefined && typeof r.verdict !== "string"))) return emptyGuidedProgress();
-    return { invoice_id: p.invoice_id, next: p.next, paused: p.paused, results: p.results.map(r => ({ ...r, tx_links: testnetTxLinks(r.tx_links) })) };
+    return { invoice_id: p.invoice_id, next: p.next, paused: p.paused, results: p.results.map(r => ({ ...r, tx_links: testnetTxLinks(r.tx_links), ...(r.tx_hashes !== undefined ? { tx_hashes: guidedTxHashes(r.tx_hashes) } : {}) })) };
   } catch { return emptyGuidedProgress(); }
 }

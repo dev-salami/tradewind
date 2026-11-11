@@ -54,6 +54,6 @@ Send exactly $8.00 USDC from the Tradewind pool to sample-cashew.near. Terms 9f2
     expect(checked(invoice, base).text).toContain("verdict pass");
     expect(defaulted(invoice, "1000000", base).text).toContain("pool wrote off $1.00");
     expect(lpSharePrice("1000000", "1007500", base).text).toContain("1.0000 → 1.0075");
-    expect(paymentReceived(invoice, invoice.paid, "6000000", 1, 2, "Base", base).text).toContain("$6.00 of $10.00 via Base · part 1 of 2");
+    expect(paymentReceived(invoice, invoice.paid, "6000000", 1, 2, "Base", base).text).toContain("$6.00 of $10.00 via Base · Payment 1 of 2");
   });
 });
