@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { repository, migrate } from "../src/server/db";
 import { tokenBucket } from "../src/server/rate-limit";
@@ -24,6 +25,42 @@ describe("rate limiter", () => {
   });
 });
 describe("database", () => {
+  it("adds nullable tx metadata to a legacy table idempotently without losing rows", () => {
+    const db = new DatabaseSync(":memory:");
+    try {
+      db.exec("CREATE TABLE tx_log (tx_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL, invoice_id TEXT, created_at INTEGER NOT NULL); INSERT INTO tx_log VALUES ('legacy-hash', 'sample.testnet', 'TW-0042', 1)");
+      migrate(db); migrate(db);
+      expect(db.prepare("PRAGMA table_info(tx_log)").all().map(row => row.name)).toEqual(["tx_hash", "account_id", "invoice_id", "created_at", "method", "kind"]);
+      expect(db.prepare("SELECT * FROM tx_log").get()).toEqual({ tx_hash: "legacy-hash", account_id: "sample.testnet", invoice_id: "TW-0042", created_at: 1, method: null, kind: null });
+    } finally { db.close(); }
+  });
+  it("enriches hashes, COALESCE preserves metadata, and invoice history is ordered", () => {
+    const repo = repository(":memory:");
+    try {
+      repo.putTx("first-hash", "sample.testnet", null);
+      repo.db.prepare("UPDATE tx_log SET created_at=1").run();
+      repo.putTx("second-hash", "sample.testnet", "TW-0042", "accept_invoice", "accept");
+      repo.putTx("first-hash", "sample.testnet", "TW-0042", "create_invoice", "create");
+      repo.putTx("first-hash", "sample.testnet", null);
+      repo.putTx("first-hash", "sample.testnet", null, null, null);
+      expect(repo.txsForInvoice("TW-0042")).toEqual([
+        { tx_hash: "first-hash", account_id: "sample.testnet", invoice_id: "TW-0042", created_at: 1, method: "create_invoice", kind: "create" },
+        expect.objectContaining({ tx_hash: "second-hash", method: "accept_invoice", kind: "accept" }),
+      ]);
+      expect(repo.txsForInvoice("TW-9999")).toEqual([]);
+      expect(() => repo.db.prepare("UPDATE tx_log SET kind='invented'").run()).toThrow();
+    } finally { repo.db.close(); }
+  });
+  it.each(["method", "kind"])("completes a partially migrated tx table with only %s", column => {
+    const db = new DatabaseSync(":memory:");
+    try {
+      db.exec(`CREATE TABLE tx_log (tx_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL, invoice_id TEXT, created_at INTEGER NOT NULL, ${column} TEXT)`);
+      migrate(db); migrate(db);
+      const columns = db.prepare("PRAGMA table_info(tx_log)").all().map(row => row.name);
+      expect(columns.filter(name => name === "method")).toHaveLength(1);
+      expect(columns.filter(name => name === "kind")).toHaveLength(1);
+    } finally { db.close(); }
+  });
   it("idempotent file migrations and draft expiration", () => {
     const dir = mkdtempSync(join(tmpdir(), "tradewind-db-"));
     const repo = repository(join(dir, "test.db"));

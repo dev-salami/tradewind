@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { BadgeCheck, FileCheck2, ShieldCheck } from "lucide-react";
-import { formatNs, formatUsd, paymentSplits, type Invoice, type NearNetwork, explorerAccount } from "@tradewind/core";
-import { data } from "@/lib/data";
+import { formatNs, formatUsd, paymentSplits, type Invoice, type NearNetwork, explorerAccount, explorerTx } from "@tradewind/core";
+import { data, isFixtureMode, network } from "@/lib/data";
+import type { ReceiptTx } from "@/lib/receipt-txs";
 import { VerifyButton } from "./verify-button";
 import { fixtureProof } from "@/lib/fixture-proof";
 import { Card, Pill } from "./surfaces";
@@ -37,24 +38,36 @@ export function TokenCard({ invoice, holder, network }: { invoice: Invoice; hold
     <div className="tw-hatch" aria-hidden="true" />
   </Card>;
 }
-export async function Timeline({ invoice }: { invoice: Invoice }) {
+export async function Timeline({ invoice, txs = [] }: { invoice: Invoice; txs?: readonly ReceiptTx[] }) {
   const config = await data().getConfig();
+  const known = isFixtureMode() ? [] : txs;
+  const hashFor = (kind: ReceiptTx["kind"]) => known.find(tx => tx.kind === kind)?.tx_hash;
+  const repayments = known.filter(tx => tx.kind === "repay");
   const steps = [
-    { name: "Created", at: invoice.created_at }, { name: "Checked", at: invoice.verification?.at },
-    { name: "Accepted", at: invoice.accepted_at }, { name: "Funded", at: invoice.advance?.at },
-    ...invoice.payments.map((p, index) => ({ name: `Paid part ${index + 1}`, at: p.at })),
-    { name: "Repaid", at: invoice.status === "Repaid" ? invoice.payments.at(-1)?.at : null },
+    { name: "Created", at: invoice.created_at, hash: hashFor("create") }, { name: "Checked", at: invoice.verification?.at, hash: hashFor("verify") },
+    { name: "Accepted", at: invoice.accepted_at, hash: hashFor("accept") }, { name: "Funded", at: invoice.advance?.at, hash: hashFor("advance") },
+    ...invoice.payments.map((p, index) => ({ name: `Paid part ${index + 1}`, at: p.at, hash: repayments[index]?.tx_hash })),
+    { name: "Repaid", at: invoice.status === "Repaid" ? invoice.payments.at(-1)?.at : null, hash: invoice.status === "Repaid" ? repayments[invoice.payments.length - 1]?.tx_hash : undefined },
   ];
-  return <Card title="On-chain timeline"><ol className="tw-timeline">{steps.map(step => <li key={step.name} className={step.at ? "tw-complete" : ""}><span className="tw-timeline-dot" /><div><strong>{step.name}</strong><p className="tw-muted">{step.at ? formatNs(step.at, { originNs: invoice.accepted_at ?? invoice.created_at, secondsPerDay: config.seconds_per_day }) : "Not yet recorded"}</p><small>{step.at ? "Transaction link unavailable · event indexer pending" : "Transaction link pending"}</small></div></li>)}</ol></Card>;
+  return <Card title="On-chain timeline"><ol className="tw-timeline">{steps.map(step => {
+    const url = step.hash ? explorerTx(network(), step.hash) : null;
+    return <li key={step.name} className={step.at ? "tw-complete" : ""}><span className="tw-timeline-dot" /><div><strong>{step.name}</strong><p className="tw-muted">{step.at ? formatNs(step.at, { originNs: invoice.accepted_at ?? invoice.created_at, secondsPerDay: config.seconds_per_day }) : "Not yet recorded"}</p><small>{url ? <a className="tw-text-link" href={url} target="_blank" rel="noreferrer">View tx ↗</a> : step.at ? "Transaction link unavailable" : "Transaction link pending"}</small></div></li>;
+  })}</ol></Card>;
 }
-export function PaymentList({ invoice }: { invoice: Invoice }) {
+export function PaymentList({ invoice, txs = [] }: { invoice: Invoice; txs?: readonly ReceiptTx[] }) {
   const splits = paymentSplits(invoice);
+  const repayments = isFixtureMode() ? [] : txs.filter(tx => tx.kind === "repay");
   const settled = BigInt(invoice.paid.total) - BigInt(invoice.paid.overpaid);
   const percentage = BigInt(invoice.face) ? Number(settled * 10_000n / BigInt(invoice.face)) / 100 : 0;
   return <Card title="Payments & waterfall" action={<Link className="tw-ghost" href={`/pay/${invoice.id}`}>Pay invoice ↗</Link>}>
     <div className="tw-stack"><p className="tw-money">{formatUsd(settled)} of {formatUsd(invoice.face)} paid</p><div className="tw-progress" role="progressbar" aria-label="Invoice repaid" aria-valuenow={percentage} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percentage}%` }} /></div>
       {!splits.length && <p className="tw-muted">No payments yet. The pool is repaid first, then protocol, then exporter.</p>}
-      {splits.map(({ payment, split }, index) => <article className="tw-payment" key={payment.payment_ref + index}><div className="tw-card-head"><h3>Part {index + 1} · <span className="tw-money">{formatUsd(payment.amount)}</span></h3><Pill value="Money in" tone="green" /></div><p className="tw-muted tw-break">{payment.sender} · {payment.payment_ref}</p><p className="tw-muted tw-small">Recorded at {formatNs(payment.at)}</p><WaterfallBars split={split} /></article>)}
+      {repayments.length > 0 && <p className="tw-muted tw-small">Recorded repayment tx links are matched to payment parts by order, not by payment reference; the record may be incomplete.</p>}
+      {splits.map(({ payment, split }, index) => {
+        const hash = repayments[index]?.tx_hash;
+        const url = hash ? explorerTx(network(), hash) : null;
+        return <article className="tw-payment" key={payment.payment_ref + index}><div className="tw-card-head"><h3>Part {index + 1} · <span className="tw-money">{formatUsd(payment.amount)}</span></h3><Pill value="Money in" tone="green" /></div><p className="tw-muted tw-break">{payment.sender} · {payment.payment_ref}</p><p className="tw-muted tw-small">Recorded at {formatNs(payment.at)}{url && <> · <a className="tw-text-link" href={url} target="_blank" rel="noreferrer" aria-label={`Part ${index + 1} tx (matched by order)`}>tx ↗</a></>}</p><WaterfallBars split={split} /></article>;
+      })}
     </div>
   </Card>;
 }

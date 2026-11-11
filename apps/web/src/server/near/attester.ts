@@ -4,6 +4,7 @@ import { env } from "../env";
 import { ApiError, NotConfiguredError } from "../errors";
 import { assertMockNetwork } from "../nearai/mock";
 import type { VerificationResult } from "../nearai/verify-flow";
+import { store } from "../db";
 export async function recordVerification(id: string, result: VerificationResult): Promise<string> {
   const e = env();
   if (result.mock) assertMockNetwork(e.NEAR_NETWORK);
@@ -15,5 +16,7 @@ export async function recordVerification(id: string, result: VerificationResult)
   const account = new Account(near.connection, e.ATTESTER_ACCOUNT_ID);
   const { verdict, model_id, request_hash, response_hash, signature, signing_address, signing_algo, chat_id } = result;
   const outcome = await account.functionCall({ contractId: e.CORE_CONTRACT_ID, methodName: "record_verification", args: { id, v: { verdict, model_id, request_hash, response_hash, signature, signing_address, signing_algo, chat_id, at: "0" } }, gas: 30_000_000_000_000n, attachedDeposit: 0n });
-  return outcome.transaction.hash;
+  const hash = outcome.transaction.hash;
+  store().putTx(hash, e.ATTESTER_ACCOUNT_ID, id, "record_verification", "verify");
+  return hash;
 }

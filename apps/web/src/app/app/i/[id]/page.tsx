@@ -5,11 +5,15 @@ import { data, isFixtureMode, network, contractHolder } from "@/lib/data";
 import { Card, Pill } from "@/components/surfaces";
 import { AiProof, Timeline, TokenCard, PaymentList, ShortHash } from "@/components/invoice-panels";
 import { AdvanceInvoice, CancelInvoice } from "@/components/invoice-flows";
+import { WorkerReceipts } from "@/components/worker-receipts";
+import { store } from "@/server/db";
+import { withWorkerTransactions } from "@/server/receipt-transactions";
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const source = data();
   const invoice = await source.getInvoice(id);
   if (!invoice) notFound();
+  const txs = isFixtureMode() ? [] : withWorkerTransactions(id, store().txsForInvoice(id));
   const [livePreview, buyer] = await Promise.all([source.previewAdvance(id), source.getBuyerRecord(invoice.buyer)]);
   const preview = invoice.advance ? { ...livePreview, rate_bps: invoice.advance.rate_bps, advance: invoice.advance.amount, pool_fee: invoice.advance.pool_fee, protocol_fee: invoice.advance.protocol_fee, exporter_rest: (BigInt(invoice.face) - BigInt(invoice.advance.amount) - BigInt(invoice.advance.pool_fee) - BigInt(invoice.advance.protocol_fee)).toString() } : livePreview;
   const repaid = buyer ? buyer.repaid_on_time + buyer.repaid_grace + buyer.repaid_late : 0;
@@ -21,7 +25,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       <p className={preview.eligible ? "tw-green" : "tw-muted"}>{preview.eligible ? "Eligible for advance" : preview.reason}</p><AdvanceInvoice invoice={invoice} /><CancelInvoice invoice={invoice} />
       <p className="tw-small">Terms <ShortHash value={invoice.terms_hash} /></p>
     </Card></div>
-    <div className="tw-row-2"><Timeline invoice={invoice} /><AiProof invoice={invoice} sample={isFixtureMode()} /></div><PaymentList invoice={invoice} />
-    <Card title="Buyer & reminders"><div className="tw-toolbar"><Link href={`/b/${id}`} className="tw-ghost">Buyer review ↗</Link><Link href={`/buyer/${invoice.buyer}`} className="tw-ghost">Buyer record ↗</Link></div><p className="tw-muted tw-small">No reminder log connected. Telegram not linked.</p></Card>
+    <div className="tw-row-2"><Timeline invoice={invoice} txs={txs} /><AiProof invoice={invoice} sample={isFixtureMode()} /></div><PaymentList invoice={invoice} txs={txs} />
+    <WorkerReceipts id={invoice.id} txs={txs} />
+    <Card title="Buyer"><div className="tw-toolbar"><Link href={`/b/${id}`} className="tw-ghost">Buyer review ↗</Link><Link href={`/buyer/${invoice.buyer}`} className="tw-ghost">Buyer record ↗</Link></div></Card>
   </div>;
 }
