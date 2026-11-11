@@ -175,3 +175,12 @@ describe("invoice NFT preview", () => {
     expect(preview).toHaveTextContent(invoice.id); expect(preview).toHaveTextContent("Tradewind"); expect(preview).toHaveTextContent("Due:"); expect(preview).toHaveTextContent(invoice.status);
   });
 });
+
+import { isMockVerification } from "@/lib/verify-signature";
+describe("mock verdict detection", () => {
+  it("flags test-key ECDSA mock verdicts and legacy mock algo, not real signers", () => {
+    expect(isMockVerification({ signing_algo: "ecdsa", model_id: "mock/sample-parser", signing_address: "0x2C7536E3605D9C16A7A3D7B1898E529396A65C23" })).toBe(true);
+    expect(isMockVerification({ signing_algo: "mock", model_id: "seed-mock" })).toBe(true);
+    expect(isMockVerification({ signing_algo: "ecdsa", model_id: "z-ai/glm-5.3-flash", signing_address: "0x1111111111111111111111111111111111111111" })).toBe(false);
+  });
+});
