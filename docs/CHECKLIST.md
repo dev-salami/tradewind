@@ -10,7 +10,7 @@ End-to-end check on a local near-sandbox (real web app + worker + contracts; ful
 
 - [x] **F1** Wallet connect and exporter onboarding (wallet selector, display name/country, USDC storage registration before first advance) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F2** Invoice creation + document upload (fields, browser SHA-256 doc hash, terms hash, `create_invoice` with storage deposit, face/max/buyer≠exporter guards) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
-- [x] **F3** Private AI verification via NEAR AI Cloud (verifiable-model allowlist, `provider_tee` signature fetch + EIP-191 check, verdict recomputed server-side, attester writes `record_verification`; unverified blocks advance; mock fixtures when no key) — [#5](https://github.com/dev-salami/tradewind/pull/5) (live NEAR AI path + mock until a key exists; TDX quote/E2EE TODOs documented)
+- [x] **F3** Private AI verification via NEAR AI Cloud (verifiable-model allowlist, `provider_tee` signature fetch + EIP-191 check, verdict recomputed server-side, attester writes `record_verification`; unverified blocks advance; mock fixtures when no key) — [#5](https://github.com/dev-salami/tradewind/pull/5) (live NEAR AI path + mock until a key exists; TDX quote/E2EE TODOs documented); TDX/DCAP attestation verification on real recorded reports, ECDSA E2EE, vision path, chain-read Verify, single AI call [#23](https://github.com/dev-salami/tradewind/pull/23) (live path still needs a NEAR AI key)
 - [x] **F4** Buyer review + on-chain acceptance (only named buyer, terms hash match, `due_at`) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F5** Invoice NFT NEP-171 minted on acceptance (core + metadata + enumeration, `nft_mint` event, holder transfers disabled, moves to pool on advance, back on repay) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
 - [x] **F7a** USDC pool vault (deposit via `ft_transfer_call`, redeem up to idle, allowlist with refund) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
@@ -40,7 +40,7 @@ End-to-end check on a local near-sandbox (real web app + worker + contracts; ful
 
 - [ ] **S1** Gasless buyer acceptance (NEP-366 meta-transaction relayer)
 - [x] **S2** CSV export of invoices and payments — [#17](https://github.com/dev-salami/tradewind/pull/17) invoices + payments CSV (exact 6-dp amounts, formula-injection safe), dashboard links
-- [ ] **S3** On-chain `ecrecover` check of the TEE signature against an allowlisted signing address
+- [x] **S3** On-chain `ecrecover` check of the TEE signature against an allowlisted signing address — contract allowlist + ecrecover [#19](https://github.com/dev-salami/tradewind/pull/19), mock public-test-key signatures [#23](https://github.com/dev-salami/tradewind/pull/23) (flag off by default; enable after allowlisting real TEE signers)
 
 ## Needs the owner (not code)
 
