@@ -12,3 +12,4 @@ coverage/
 *.wasm
 !res/*.wasm
 .turbo/
+*.tsbuildinfo
