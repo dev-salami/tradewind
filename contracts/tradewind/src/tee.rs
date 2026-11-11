@@ -1,7 +1,7 @@
 use crate::{invoice::Verification, *};
 
 fn hex_bytes(value: &str) -> Option<Vec<u8>> {
-    if value.len() % 2 != 0 || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !value.len().is_multiple_of(2) || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     (0..value.len())
@@ -32,14 +32,20 @@ impl Contract {
         let digest = env::keccak256(payload.as_bytes());
         let public_key = env::ecrecover(&digest, &signature[..64], recovery, true)
             .unwrap_or_else(|| env::panic_str("tee signature invalid"));
-        let hash = env::keccak256(&public_key);
+        let hash = env::keccak256(public_key);
         let recovered = format!(
             "0x{}",
-            hash[12..].iter().map(|b| format!("{b:02x}")).collect::<String>()
+            hash[12..]
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
         );
         let claimed = normalise_address(&v.signing_address)
             .unwrap_or_else(|| env::panic_str("tee signature invalid"));
         assert_eq!(recovered, claimed, "tee signature invalid");
-        assert!(self.tee_signers.contains(&recovered), "tee signer not allowlisted");
+        assert!(
+            self.tee_signers.contains(&recovered),
+            "tee signer not allowlisted"
+        );
     }
 }

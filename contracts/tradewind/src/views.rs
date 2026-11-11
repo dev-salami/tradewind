@@ -112,11 +112,16 @@ impl Contract {
             Some("invoice due".to_string())
         } else if b.frozen {
             let default = self.invoices_by_buyer.get(&i.buyer).and_then(|ids| {
-                ids.iter().filter_map(|id| self.invoices.get(id))
-                    .find(|invoice| invoice.was_defaulted).map(|invoice| invoice.id)
+                ids.iter()
+                    .filter_map(|id| self.invoices.get(id))
+                    .find(|invoice| invoice.was_defaulted)
+                    .map(|invoice| invoice.id)
             });
-            Some(default.map(|id| format!("buyer frozen after default on {id}"))
-                .unwrap_or_else(|| "buyer frozen after default".into()))
+            Some(
+                default
+                    .map(|id| format!("buyer frozen after default on {id}"))
+                    .unwrap_or_else(|| "buyer frozen after default".into()),
+            )
         } else if p.rate_bps == 0 {
             Some("buyer not eligible: negative score or zero advance rate".to_string())
         } else if terms.is_none() {
@@ -127,9 +132,11 @@ impl Contract {
             .checked_add(p.advance.0)
             .is_none_or(|n| n > self.buyer_limit(&i.buyer, &b))
         {
-            Some(format!("buyer exposure limit reached: {} open of {}",
+            Some(format!(
+                "buyer exposure limit reached: {} open of {}",
                 crate::visual::dollars(b.open_principal.0),
-                crate::visual::dollars(self.buyer_limit(&i.buyer, &b))))
+                crate::visual::dollars(self.buyer_limit(&i.buyer, &b))
+            ))
         } else if p.advance.0 > self.pool.idle.0 {
             Some("pool idle liquidity too low".to_string())
         } else if p.advance.0

@@ -9,14 +9,20 @@ impl Contract {
         self.assert_owner();
         let address = crate::tee::normalise_address(&address).expect("invalid tee address");
         self.tee_signers.insert(&address);
-        emit("admin_action", json!({"action":"add_tee_signer","address":address}));
+        emit(
+            "admin_action",
+            json!({"action":"add_tee_signer","address":address}),
+        );
     }
     #[payable]
     pub fn remove_tee_signer(&mut self, address: String) {
         self.assert_owner();
         let address = crate::tee::normalise_address(&address).expect("invalid tee address");
         self.tee_signers.remove(&address);
-        emit("admin_action", json!({"action":"remove_tee_signer","address":address}));
+        emit(
+            "admin_action",
+            json!({"action":"remove_tee_signer","address":address}),
+        );
     }
     #[payable]
     pub fn set_buyer_limit_override(&mut self, account_id: AccountId, limit: Option<U128>) {
@@ -26,7 +32,10 @@ impl Contract {
         } else {
             self.buyer_limit_overrides.remove(&account_id);
         }
-        emit("admin_action", json!({"action":"set_buyer_limit_override","account_id":account_id,"limit":limit}));
+        emit(
+            "admin_action",
+            json!({"action":"set_buyer_limit_override","account_id":account_id,"limit":limit}),
+        );
     }
     #[payable]
     pub fn set_config(&mut self, config: Config) {

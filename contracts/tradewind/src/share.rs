@@ -118,8 +118,14 @@ impl StorageManagement for Contract {
 #[near]
 impl FungibleTokenMetadataProvider for Contract {
     fn ft_metadata(&self) -> FungibleTokenMetadata {
-        FungibleTokenMetadata { spec:FT_METADATA_SPEC.into(),name:"Tradewind Pool Share".into(),symbol:"twPOOL".into(),
-            icon:Some(crate::visual::icon()),
-            reference:None,reference_hash:None,decimals:6 }
+        FungibleTokenMetadata {
+            spec: FT_METADATA_SPEC.into(),
+            name: "Tradewind Pool Share".into(),
+            symbol: "twPOOL".into(),
+            icon: Some(crate::visual::icon()),
+            reference: None,
+            reference_hash: None,
+            decimals: 6,
+        }
     }
 }

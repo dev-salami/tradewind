@@ -271,12 +271,18 @@ impl Contract {
             self.assert_owner();
         } else {
             assert_eq!(
-                env::predecessor_account_id(), i.exporter,
+                env::predecessor_account_id(),
+                i.exporter,
                 "exporter or owner only"
             );
-            assert_ne!(i.status, InvoiceStatus::Accepted, "invoice already accepted");
+            assert_ne!(
+                i.status,
+                InvoiceStatus::Accepted,
+                "invoice already accepted"
+            );
             assert_eq!(
-                env::attached_deposit().as_yoctonear(), 0,
+                env::attached_deposit().as_yoctonear(),
+                0,
                 "no deposit required"
             );
         }
@@ -295,7 +301,10 @@ impl Contract {
         i.status = InvoiceStatus::Cancelled;
         self.invoices.insert(&id, &i);
         if owner {
-            emit("admin_action", json!({"action":"cancel_invoice","invoice_id":id}));
+            emit(
+                "admin_action",
+                json!({"action":"cancel_invoice","invoice_id":id}),
+            );
         }
         emit("invoice_cancelled", json!({"invoice_id":id}));
     }

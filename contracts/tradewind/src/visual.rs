@@ -9,7 +9,9 @@ fn data_uri(svg: &str) -> String {
 }
 
 pub(crate) fn icon() -> String {
-    data_uri(&format!("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>{MARK}</svg>"))
+    data_uri(&format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>{MARK}</svg>"
+    ))
 }
 
 pub(crate) fn dollars(amount: u128) -> String {
@@ -19,11 +21,16 @@ pub(crate) fn dollars(amount: u128) -> String {
 fn xml_label(text: &str) -> String {
     // Truncate before escaping, at Unicode scalar boundaries. Strip XML 1.0
     // forbidden control characters too; escaping alone does not make those safe.
-    text.chars().filter(|c| matches!(*c, '\t' | '\n' | '\r') || *c >= ' ')
+    text.chars()
+        .filter(|c| matches!(*c, '\t' | '\n' | '\r') || *c >= ' ')
         .filter(|c| !matches!(*c, '\u{fffe}' | '\u{ffff}'))
-        .take(32).collect::<String>()
-        .replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-        .replace('"', "&quot;").replace('\'', "&apos;")
+        .take(32)
+        .collect::<String>()
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 pub(crate) fn invoice_media(i: &Invoice) -> String {

@@ -100,7 +100,10 @@ async fn default_path() -> Result<()> {
     let next = h.accepted(&h.exporter, &h.buyer2, USDC, 60).await?;
     let preview = h.view("preview_advance", json!({"id": next["id"]})).await?;
     assert_eq!(preview["eligible"], false);
-    assert_eq!(preview["reason"], format!("buyer frozen after default on {id}"));
+    assert_eq!(
+        preview["reason"],
+        format!("buyer frozen after default on {id}")
+    );
     let result = h.repay(&h.buyer2, id, 9 * USDC, "after-default").await?;
     assert!(result
         .logs()
@@ -413,30 +416,74 @@ async fn guided_cancel_override_and_reasons() -> Result<()> {
     let h = Harness::new().await?;
     let created = h.create(&h.exporter, &h.buyer, USDC, 365).await?;
     let id = created["id"].as_str().unwrap();
-    assert_eq!(h.view("preview_advance", json!({"id": id})).await?["reason"], "invoice must be Accepted");
-    h.call(&h.exporter, &h.core, "cancel_invoice", json!({"id": id}), 0).await?;
+    assert_eq!(
+        h.view("preview_advance", json!({"id": id})).await?["reason"],
+        "invoice must be Accepted"
+    );
+    h.call(&h.exporter, &h.core, "cancel_invoice", json!({"id": id}), 0)
+        .await?;
     assert_eq!(h.invoice(id).await?["status"], "Cancelled");
-    assert!(h.view("nft_token", json!({"token_id": id})).await?.is_null());
+    assert!(h
+        .view("nft_token", json!({"token_id": id}))
+        .await?
+        .is_null());
 
     let invoice = h.accepted(&h.exporter, &h.buyer, 10 * USDC, 365).await?;
     let id = invoice["id"].as_str().unwrap();
-    h.call(&h.owner, &h.core, "set_buyer_limit_override", json!({"account_id": h.buyer.id(), "limit": "0"}), 1).await?;
-    assert_eq!(h.view("preview_advance", json!({"id": id})).await?["reason"], "buyer exposure limit reached: $0.00 open of $0.00");
-    h.call(&h.owner, &h.core, "set_buyer_limit_override", json!({"account_id": h.buyer.id(), "limit": "50000000"}), 1).await?;
-    assert_eq!(h.view("preview_advance", json!({"id": id})).await?["eligible"], true);
+    h.call(
+        &h.owner,
+        &h.core,
+        "set_buyer_limit_override",
+        json!({"account_id": h.buyer.id(), "limit": "0"}),
+        1,
+    )
+    .await?;
+    assert_eq!(
+        h.view("preview_advance", json!({"id": id})).await?["reason"],
+        "buyer exposure limit reached: $0.00 open of $0.00"
+    );
+    h.call(
+        &h.owner,
+        &h.core,
+        "set_buyer_limit_override",
+        json!({"account_id": h.buyer.id(), "limit": "50000000"}),
+        1,
+    )
+    .await?;
+    assert_eq!(
+        h.view("preview_advance", json!({"id": id})).await?["eligible"],
+        true
+    );
     assert_eq!(h.record(&h.buyer).await?["buyer_limit"], "50000000");
     h.call(&h.owner, &h.core, "pause", json!({}), 1).await?;
-    assert_eq!(h.view("preview_advance", json!({"id": id})).await?["reason"], "contract paused");
+    assert_eq!(
+        h.view("preview_advance", json!({"id": id})).await?["reason"],
+        "contract paused"
+    );
     let before = h.record(&h.buyer).await?;
-    let result = h.call(&h.owner, &h.core, "cancel_invoice", json!({"id": id}), 1).await?;
+    let result = h
+        .call(&h.owner, &h.core, "cancel_invoice", json!({"id": id}), 1)
+        .await?;
     assert!(result.logs().iter().any(|log| log.contains("nft_burn")));
     assert_eq!(h.invoice(id).await?["status"], "Cancelled");
-    assert!(h.view("nft_token", json!({"token_id": id})).await?.is_null());
+    assert!(h
+        .view("nft_token", json!({"token_id": id}))
+        .await?
+        .is_null());
     assert_eq!(h.view("nft_total_supply", json!({})).await?, "0");
     assert_eq!(h.record(&h.buyer).await?, before);
-    let result = h.transact(&h.keeper, &h.core, "mark_default", json!({"id": id}), 0).await?;
+    let result = h
+        .transact(&h.keeper, &h.core, "mark_default", json!({"id": id}), 0)
+        .await?;
     assert_failure(&result, "invalid status");
-    h.call(&h.owner, &h.core, "set_buyer_limit_override", json!({"account_id": h.buyer.id(), "limit": null}), 1).await?;
+    h.call(
+        &h.owner,
+        &h.core,
+        "set_buyer_limit_override",
+        json!({"account_id": h.buyer.id(), "limit": null}),
+        1,
+    )
+    .await?;
     assert_eq!(h.record(&h.buyer).await?["buyer_limit"], "10000000");
     Ok(())
 }
