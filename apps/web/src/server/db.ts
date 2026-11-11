@@ -11,13 +11,17 @@ export function migrate(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS accounts (near_account TEXT PRIMARY KEY, role_hint TEXT, display_name TEXT, country TEXT, created_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS drafts (draft_id TEXT PRIMARY KEY, exporter TEXT NOT NULL, doc_hash TEXT NOT NULL, text TEXT NOT NULL, shipping_text TEXT NOT NULL, extracted_json TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS verifications (invoice_id TEXT PRIMARY KEY, model_id TEXT NOT NULL, chat_id TEXT NOT NULL, request_hash TEXT NOT NULL, response_hash TEXT NOT NULL, signature TEXT NOT NULL, signing_address TEXT NOT NULL, signing_algo TEXT NOT NULL, signature_kind TEXT NOT NULL, attestation_nonce TEXT NOT NULL, verdict_json TEXT NOT NULL, verified_ok INTEGER NOT NULL, tx_hash TEXT, created_at INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY, action TEXT NOT NULL, invoice_id TEXT, detail TEXT NOT NULL, created_at INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY, action TEXT NOT NULL, invoice_id TEXT, detail TEXT NOT NULL, created_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS tx_log (tx_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL, invoice_id TEXT, created_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS tx_log_invoice ON tx_log(invoice_id);`);
 }
 export function repository(path: string) {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path); migrate(db); migrateTelegram(db);
   return {
     db,
+    getAccount(account: string) { return db.prepare("SELECT near_account, display_name, country FROM accounts WHERE near_account = ?").get(account); },
+    putTx(hash: string, account: string, invoice: string | null) { db.prepare("INSERT INTO tx_log VALUES (?, ?, ?, ?) ON CONFLICT(tx_hash) DO UPDATE SET invoice_id=COALESCE(excluded.invoice_id, tx_log.invoice_id)").run(hash, account, invoice, Date.now()); },
     putDraft(d: Draft) { db.prepare("DELETE FROM drafts WHERE expires_at <= ?").run(Date.now()); db.prepare("INSERT INTO drafts VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(d.draft_id, d.exporter, d.doc_hash, d.text, d.shipping_text, d.extracted_json, d.created_at, d.expires_at); },
     getDraft(id: string) { db.prepare("DELETE FROM drafts WHERE expires_at <= ?").run(Date.now()); return db.prepare("SELECT * FROM drafts WHERE draft_id = ?").get(id) as unknown as Draft | undefined; },
     deleteDraft(id: string) { db.prepare("DELETE FROM drafts WHERE draft_id = ?").run(id); },

@@ -1,4 +1,10 @@
 @import "tailwindcss";
+.tw-advance-focus { outline: 3px solid #00c08b; outline-offset: 10px; border-radius: 8px; scroll-margin-top: 100px; }
+.tw-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 1000; width: min(420px, calc(100vw - 32px)); max-height: 50vh; overflow-y: auto; font-family: system-ui, sans-serif; color: #0b1f33; --w: #fff; --line: #ebebeb; }
+.tw-toasts .tw-card { background: white; padding: 16px; margin-top: 8px; box-shadow: 0 4px 20px #0b1f3326; }
+.tw-toasts a { color: #086b55; overflow-wrap: anywhere; }
+.tw-wallet-notice { padding: 16px; background: #fff0f0; color: #8e2023; position: fixed; bottom: 16px; left: 16px; max-width: calc(100vw - 32px); z-index: 1001; }
+.tw-form select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #0b1f33; }
 /* Reference layout adapted to Tradewind. */
 *,
 *::before,
