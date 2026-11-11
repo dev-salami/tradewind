@@ -81,6 +81,28 @@ verification, and erases the in-memory buffer even on failure. No PDF is stored.
 - Disable by unsetting `GUIDED_ENABLED`; never share these accounts with real
   users. The mainnet refusal is unconditional, not a UI-only safeguard.
 
+## UI
+
+`/app/guided` provides the **Play both sides** sample loop without a wallet.
+The navigation link appears only after a successful JSON POST to status;
+403/503 responses silently hide it. Mainnet renders neither the page controls
+nor the link and does not request guided status.
+
+Optional USD face and partial-payment inputs use the existing six-decimal
+`parseAmount` conversion. Full payment leaves the amount to the backend.
+Returned invoice IDs, local step progress, mock verdict labels and transaction
+links are retained in session storage under `tw:guided:invoice`. Refresh resumes
+the local guide, not an authoritative chain-state snapshot. A partial failure,
+interrupted request, or non-pass verdict pauses the flow for inspection; starting
+another sample clears only local progress and never undoes transactions. Check
+the invoice/receipt for actual repayment attribution after a submitted payment.
+Sandbox links target NearBlocks testnet but sandbox transactions are not indexed
+there. Storage-blocking browsers can continue in memory without refresh recovery.
+
+UI ordering, conversion, resume, visibility, partial errors and mocked RPC page
+renders are covered by `guided-ui.test.tsx` and `rpc-pages.test.tsx`. Tests and
+builds require the reviewer's Node-capable environment.
+
 ## Reviewer checks
 
 `apps/web/tests/guided.test.ts` mocks near-api-js and prevents network fetches.
