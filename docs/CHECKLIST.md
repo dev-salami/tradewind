@@ -8,7 +8,7 @@ Network rule for this build: **testnet / local sandbox only**. Mainnet items sta
 
 - [ ] **F1** Wallet connect and exporter onboarding (wallet selector, display name/country, USDC storage registration before first advance)
 - [ ] **F2** Invoice creation + document upload (fields, browser SHA-256 doc hash, terms hash, `create_invoice` with storage deposit, face/max/buyer≠exporter guards) — _contract side merged (#1, #3); web/wallet flow pending_
-- [ ] **F3** Private AI verification via NEAR AI Cloud (verifiable-model allowlist, `provider_tee` signature fetch + EIP-191 check, verdict recomputed server-side, attester writes `record_verification`; unverified blocks advance; mock fixtures when no key)
+- [x] **F3** Private AI verification via NEAR AI Cloud (verifiable-model allowlist, `provider_tee` signature fetch + EIP-191 check, verdict recomputed server-side, attester writes `record_verification`; unverified blocks advance; mock fixtures when no key) — [#5](https://github.com/dev-salami/tradewind/pull/5) (live NEAR AI path + mock until a key exists; TDX quote/E2EE TODOs documented)
 - [ ] **F4** Buyer review + on-chain acceptance (only named buyer, terms hash match, `due_at`) — _contract side merged (#1, #3); web/wallet flow pending_
 - [x] **F5** Invoice NFT NEP-171 minted on acceptance (core + metadata + enumeration, `nft_mint` event, holder transfers disabled, moves to pool on advance, back on repay) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
 - [ ] **F7a** USDC pool vault (deposit via `ft_transfer_call`, redeem up to idle, allowlist with refund) — _contract side merged (#1, #3); web/wallet flow pending_
@@ -26,9 +26,9 @@ Network rule for this build: **testnet / local sandbox only**. Mainnet items sta
 
 - [ ] **F6** Buyer track record + dynamic advance rate (contract scoring §6.5, exposure cap, `/buyer/:account` page, rate shown on invoice) — _contract scoring + caps merged (#1, #3); UI rate/buyer page from fixtures (#2), live wiring pending_
 - [x] **F7b** twPOOL share token (NEP-141 on the core contract, virtual-share math §6.6, `ft_mint`/`ft_burn` events, metadata) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
-- [ ] **F9** Telegram notifications + approve-advance card (deep-link linking, FrontDesk-style HTML cards, single-use 30-min callback tokens bound to terms hash + amount, approval log; runs on mocks until a bot token exists)
-- [ ] **F10b** Buyer reminders delivery (T−7, T−1, D0, T+1, T+7 contract days, never repeated, Telegram or log)
-- [ ] **F15b** LP share-price history (series from events, sparkline)
+- [x] **F9** Telegram notifications + approve-advance card (deep-link linking, FrontDesk-style HTML cards, single-use 30-min callback tokens bound to terms hash + amount, approval log; runs on mocks until a bot token exists) — [#7](https://github.com/dev-salami/tradewind/pull/7) + NEP-413 sign-in [#8](https://github.com/dev-salami/tradewind/pull/8) (runs on in-app notifications until a bot token exists)
+- [x] **F10b** Buyer reminders delivery (T−7, T−1, D0, T+1, T+7 contract days, never repeated, Telegram or log) — [#7](https://github.com/dev-salami/tradewind/pull/7)
+- [x] **F15b** LP share-price history (series from events, sparkline) — [#7](https://github.com/dev-salami/tradewind/pull/7)
 
 ## P2 — last
 
