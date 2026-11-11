@@ -120,6 +120,7 @@ fn verification(verdict: &str) -> Verification {
         signing_algo: "ecdsa".into(),
         chat_id: "sample-chat".into(),
         at: U64(0),
+        signature_checked_on_chain: false,
     }
 }
 fn verify(c: &mut Contract, id: &str, verdict: &str) {
@@ -504,7 +505,7 @@ fn limits_preview_stale_terms_and_opted_in_approver() {
     let id = accepted(&mut c);
     assert_eq!(
         c.preview_advance(id.clone()).reason.as_deref(),
-        Some("pool liquidity")
+        Some("pool idle liquidity too low")
     );
     seed_pool(&mut c);
     let hash = c.invoice(&id).terms_hash;
@@ -534,14 +535,14 @@ fn limits_preview_stale_terms_and_opted_in_approver() {
     c.buyers.insert(&account("buyer.testnet"), &b);
     assert_eq!(
         c.preview_advance(id.clone()).reason.as_deref(),
-        Some("buyer exposure")
+        Some("buyer exposure limit reached: $5.00 open of $10.00")
     );
     b.open_principal = U128(0);
     b.frozen = true;
     c.buyers.insert(&account("buyer.testnet"), &b);
     assert_eq!(
         c.preview_advance(id.clone()).reason.as_deref(),
-        Some("buyer not eligible")
+        Some("buyer frozen after default")
     );
     b.frozen = false;
     c.buyers.insert(&account("buyer.testnet"), &b);
@@ -643,7 +644,10 @@ fn acceptance_permissions_hash_and_live_metadata() {
     fails(|| c.accept_invoice(i.id.clone(), "wrong".into()));
     c.accept_invoice(i.id.clone(), i.terms_hash);
     let t = c.nft_token(i.id.clone()).unwrap();
-    assert_eq!(t.metadata.unwrap().title.unwrap(), "Invoice TW-0035");
+    assert_eq!(
+        t.metadata.unwrap().title.unwrap(),
+        "Tradewind invoice TW-0035"
+    );
     assert_eq!(c.invoices_by_exporter(account("exporter.testnet")).len(), 1);
     assert_eq!(c.invoices_by_buyer(account("buyer.testnet")).len(), 1);
     assert_eq!(c.list_invoices(None, None).len(), 1);
@@ -833,7 +837,7 @@ fn pause_matrix_and_keeper_actions() {
     fails(|| c.accept_invoice(other.id.clone(), other.terms_hash));
     assert_eq!(
         c.preview_advance(accepted_id.clone()).reason.as_deref(),
-        Some("paused")
+        Some("contract paused")
     );
     fails(|| request(&mut c, &accepted_id));
     assert_eq!(
@@ -987,4 +991,387 @@ fn all_owner_methods_reject_non_owner() {
     fails(|| c.refund_unattributed(U64(0), account("other.testnet")));
     fails(|| c.refund_overpaid("unknown".into(), account("other.testnet"), U128(1)));
     fails(|| c.set_owner(account("other.testnet")));
+    fails(|| c.add_tee_signer(TEST_SIGNER.into()));
+    fails(|| c.remove_tee_signer(TEST_SIGNER.into()));
+    fails(|| c.set_buyer_limit_override(account("buyer.testnet"), Some(U128(UNIT))));
+}
+
+#[test]
+fn live_svg_media_and_shared_mark() {
+    use near_contract_standards::fungible_token::metadata::FungibleTokenMetadataProvider;
+    use near_sdk::base64::{engine::general_purpose::STANDARD, Engine};
+    let mut c = fresh();
+    let id = accepted(&mut c);
+    let mut i = c.invoice(&id);
+    i.buyer_label = "<script>&\"' long label that must be truncated here".into();
+    c.invoices.insert(&id, &i);
+    for (status, text) in [
+        (InvoiceStatus::Accepted, "Awaiting payment"),
+        (InvoiceStatus::Funded, "Funded"),
+        (InvoiceStatus::Repaid, "Paid"),
+        (InvoiceStatus::Defaulted, "Defaulted"),
+    ] {
+        i.status = status;
+        c.invoices.insert(&id, &i);
+        let media = c
+            .nft_token(id.clone())
+            .unwrap()
+            .metadata
+            .unwrap()
+            .media
+            .unwrap();
+        assert!(media.len() < 3072);
+        let svg = String::from_utf8(
+            STANDARD
+                .decode(media.strip_prefix("data:image/svg+xml;base64,").unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        for expected in [
+            &id[..],
+            "$10.00",
+            "Net 60",
+            text,
+            "&lt;script&gt;&amp;&quot;&apos;",
+        ] {
+            assert!(svg.contains(expected), "missing {expected}");
+        }
+        assert!(!svg.contains("<script>"));
+        assert!(!svg.contains("truncated here"));
+        assert_eq!(
+            c.nft_tokens(None, None)[0]
+                .metadata
+                .as_ref()
+                .unwrap()
+                .media
+                .as_ref(),
+            Some(&media)
+        );
+        assert_eq!(
+            c.nft_tokens_for_owner(account("exporter.testnet"), None, None)[0]
+                .metadata
+                .as_ref()
+                .unwrap()
+                .media
+                .as_ref(),
+            Some(&media)
+        );
+    }
+    let icon = c.ft_metadata().icon.unwrap();
+    assert!(icon.starts_with("data:image/svg+xml;base64,"));
+    assert!(icon.len() < 2048);
+    assert_eq!(c.nft_metadata().icon, Some(icon));
+    i.buyer_label = "&".repeat(80);
+    assert!(crate::visual::invoice_media(&i).len() < 3072);
+    i.buyer_label = "🟢".repeat(80);
+    assert!(crate::visual::invoice_media(&i).len() < 3072);
+}
+
+#[test]
+fn preview_reasons_cover_every_branch_and_override() {
+    let mut c = fresh();
+    assert_eq!(
+        c.preview_advance("missing".into()).reason.as_deref(),
+        Some("invoice not found")
+    );
+    let created = create(&mut c, UNIT, 60);
+    assert_eq!(
+        c.preview_advance(created.id).reason.as_deref(),
+        Some("invoice must be Accepted")
+    );
+    let id = accepted(&mut c);
+    let mut i = c.invoice(&id);
+    i.verification = None;
+    c.invoices.insert(&id, &i);
+    assert_eq!(
+        c.preview_advance(id.clone()).reason.as_deref(),
+        Some("verification not passed")
+    );
+    i.verification = Some(verification("pass"));
+    c.invoices.insert(&id, &i);
+    assert_eq!(
+        c.preview_advance(id.clone()).reason.as_deref(),
+        Some("pool idle liquidity too low")
+    );
+    seed_pool(&mut c);
+    let mut b = c.buyer(&i.buyer);
+    b.score = -1;
+    c.buyers.insert(&i.buyer, &b);
+    assert_eq!(
+        c.preview_advance(id.clone()).reason.as_deref(),
+        Some("buyer not eligible: negative score or zero advance rate")
+    );
+    b.score = 0;
+    b.open_principal = U128(5 * UNIT);
+    c.buyers.insert(&i.buyer, &b);
+    assert_eq!(
+        c.preview_advance(id.clone()).reason.as_deref(),
+        Some("buyer exposure limit reached: $5.00 open of $10.00")
+    );
+    call("owner.testnet", 1, START);
+    c.set_buyer_limit_override(i.buyer.clone(), Some(U128(15 * UNIT)));
+    assert_eq!(
+        c.get_buyer_record(i.buyer.clone()).buyer_limit,
+        U128(15 * UNIT)
+    );
+    assert!(c.preview_advance(id.clone()).eligible);
+    event("admin_action");
+    c.set_buyer_limit_override(i.buyer.clone(), None);
+    assert!(!c.preview_advance(id.clone()).eligible);
+    b.open_principal = U128(0);
+    c.buyers.insert(&i.buyer, &b);
+    c.config.max_single_advance_bps = 1;
+    assert_eq!(
+        c.preview_advance(id.clone()).reason.as_deref(),
+        Some("single advance cap")
+    );
+    c.config.max_single_advance_bps = 5000;
+    i.face = U128(1);
+    c.config.pool_fee_bps_per_30d = 0;
+    c.config.protocol_fee_bps = 0;
+    c.invoices.insert(&id, &i);
+    assert_eq!(
+        c.preview_advance(id.clone()).reason.as_deref(),
+        Some("zero advance")
+    );
+    c.config.pool_fee_bps_per_30d = 75;
+    c.config.protocol_fee_bps = 50;
+    c.invoices.insert(&id, &i);
+    assert_eq!(
+        c.preview_advance(id).reason.as_deref(),
+        Some("fees exceed face")
+    );
+}
+
+#[test]
+fn frozen_reason_identifies_default_even_after_recovery() {
+    let mut c = fresh();
+    let id = accepted(&mut c);
+    let time = c.invoice(&id).due_at.unwrap().0 + 31 * c.config.day_ns();
+    call("keeper.testnet", 0, time);
+    c.mark_default(id.clone());
+    repay(&mut c, &id, 10 * UNIT, time + 1);
+    let next = accepted(&mut c);
+    assert_eq!(
+        c.preview_advance(next).reason,
+        Some(format!("buyer frozen after default on {id}"))
+    );
+}
+
+#[test]
+fn cancellation_permissions_burn_enumeration_and_record_untouched() {
+    let mut c = fresh();
+    let first = create(&mut c, UNIT, 60);
+    call("other.testnet", 0, START);
+    fails(|| c.cancel_invoice(first.id.clone()));
+    call("exporter.testnet", 0, START);
+    c.cancel_invoice(first.id.clone());
+    assert!(c.nft_token(first.id.clone()).is_none());
+    let verified = create(&mut c, UNIT, 60);
+    verify(&mut c, &verified.id, "pass");
+    call("owner.testnet", 1, START);
+    c.cancel_invoice(verified.id.clone());
+    let id = accepted(&mut c);
+    let retained = accepted(&mut c);
+    let before =
+        near_sdk::serde_json::to_value(c.get_buyer_record(account("buyer.testnet"))).unwrap();
+    call("exporter.testnet", 0, START);
+    fails(|| c.cancel_invoice(id.clone()));
+    call("owner.testnet", 0, START);
+    fails(|| c.cancel_invoice(id.clone()));
+    call("owner.testnet", 1, START);
+    c.cancel_invoice(id.clone());
+    assert!(standard_event("nep171", "nft_burn"));
+    event("invoice_cancelled");
+    event("admin_action");
+    assert_eq!(c.invoice(&id).status, InvoiceStatus::Cancelled);
+    assert!(c.nft_token(id.clone()).is_none());
+    assert_eq!(c.nft_total_supply(), U128(1));
+    assert_eq!(c.nft_supply_for_owner(account("exporter.testnet")), U128(1));
+    assert_eq!(c.nft_tokens(None, None)[0].token_id, retained);
+    assert_eq!(
+        near_sdk::serde_json::to_value(c.get_buyer_record(account("buyer.testnet"))).unwrap(),
+        before
+    );
+    call("keeper.testnet", 0, START + 1000 * c.config.day_ns());
+    fails(|| c.mark_default(id.clone()));
+    fails(|| c.mark_overdue(id.clone()));
+    let pending = funded(&mut c);
+    call("owner.testnet", 1, START);
+    fails(|| c.cancel_invoice(pending));
+}
+
+#[test]
+fn cancellation_blocks_pending_and_clears_last_owner_enumeration() {
+    let mut c = fresh();
+    seed_pool(&mut c);
+    let id = accepted(&mut c);
+    request(&mut c, &id);
+    call("owner.testnet", 1, START);
+    fails(|| c.cancel_invoice(id.clone()));
+    callback(false, START);
+    c.on_advance_sent(id.clone());
+    call("owner.testnet", 1, START);
+    c.cancel_invoice(id.clone());
+    assert_eq!(c.nft_total_supply(), U128(0));
+    assert_eq!(c.nft_supply_for_owner(account("exporter.testnet")), U128(0));
+    assert!(c.nft_tokens(None, None).is_empty());
+    assert!(c
+        .nft_tokens_for_owner(account("exporter.testnet"), None, None)
+        .is_empty());
+    // Terminal cancellation cannot be accepted or verified again.
+    call("buyer.testnet", 1, START);
+    fails(|| c.accept_invoice(id.clone(), c.invoice(&id).terms_hash));
+    call("attester.testnet", 0, START);
+    fails(|| c.record_verification(id.clone(), verification("pass")));
+}
+
+// Well-known public Ethereum test key (never use for funds):
+// 0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318
+const TEST_SIGNER: &str = "0x2c7536e3605d9c16a7a3d7b1898e529396a65c23";
+const MESSAGE: &str = "verifiable-model:abababababababababababababababababababababababababababababababab:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+// Signature produced by scripts/sign-test-vector.mjs (viem, EIP-191 personal_sign).
+const SIG_HEX: &str = "0x9084f7ca99e0485f6020ea8a683be4d47165bbfd0476c62b2919fe2f60f50c4d678f366a104fa15a8792c855562f7ef236cf73bc5ea994e9a0787bcfd8ee06c01c";
+
+fn signed_verification() -> Verification {
+    let mut v = verification("pass");
+    assert_eq!(
+        format!("{}:{}:{}", v.model_id, v.request_hash, v.response_hash),
+        MESSAGE
+    );
+    assert!(SIG_HEX.starts_with("0x"), "reviewer must fill SIG_HEX");
+    v.signature = SIG_HEX.into();
+    v.signing_address = TEST_SIGNER.into();
+    v
+}
+
+#[test]
+fn tee_valid_vector_sets_checked_flag() {
+    let mut c = fresh();
+    c.config.require_tee_signature = true;
+    call("owner.testnet", 1, START);
+    c.add_tee_signer(TEST_SIGNER.to_ascii_uppercase());
+    // Both Ethereum v conventions, prefixed/unprefixed signature, and mixed-case address.
+    for ethereum_v in [false, true] {
+        let i = create(&mut c, UNIT, 60);
+        let mut v = signed_verification();
+        let hex = v.signature.trim_start_matches("0x");
+        let recovery = u8::from_str_radix(&hex[128..], 16).unwrap();
+        let recovery = if recovery >= 27 {
+            recovery - 27
+        } else {
+            recovery
+        };
+        let recovery = if ethereum_v { recovery + 27 } else { recovery };
+        v.signature = format!(
+            "{}{}{recovery:02x}",
+            if ethereum_v { "0x" } else { "" },
+            &hex[..128]
+        );
+        v.signing_address = TEST_SIGNER.to_ascii_uppercase();
+        call("attester.testnet", 0, START);
+        c.record_verification(i.id.clone(), v);
+        assert!(
+            c.invoice(&i.id)
+                .verification
+                .unwrap()
+                .signature_checked_on_chain
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "tee signature invalid")]
+fn tee_wrong_claimed_address() {
+    let mut c = fresh();
+    c.config.require_tee_signature = true;
+    let i = create(&mut c, UNIT, 60);
+    let mut v = signed_verification();
+    v.signing_address = format!("0x{}", "00".repeat(20));
+    call("attester.testnet", 0, START);
+    c.record_verification(i.id, v);
+}
+
+#[test]
+#[should_panic(expected = "tee signer not allowlisted")]
+fn tee_valid_but_not_allowlisted() {
+    let mut c = fresh();
+    c.config.require_tee_signature = true;
+    let i = create(&mut c, UNIT, 60);
+    call("attester.testnet", 0, START);
+    c.record_verification(i.id, signed_verification());
+}
+
+#[test]
+fn tee_allowlist_validation_and_flag_off_is_attester_compatible() {
+    let mut c = fresh();
+    assert!(!c.config.require_tee_signature);
+    call("owner.testnet", 1, START);
+    c.add_tee_signer(TEST_SIGNER.to_ascii_uppercase());
+    assert_eq!(c.get_tee_signers(), vec![TEST_SIGNER.to_string()]);
+    c.remove_tee_signer(TEST_SIGNER.into());
+    assert!(c.get_tee_signers().is_empty());
+    fails(|| c.add_tee_signer("0x1234".into()));
+    fails(|| c.add_tee_signer(format!("0x{}", "zz".repeat(20))));
+    call("owner.testnet", 0, START);
+    fails(|| c.add_tee_signer(TEST_SIGNER.into()));
+    let i = create(&mut c, UNIT, 60);
+    let mut v = verification("pass");
+    v.signature_checked_on_chain = true; // Never trust a caller-supplied flag.
+    call("attester.testnet", 0, START);
+    c.record_verification(i.id.clone(), v);
+    assert!(
+        !c.invoice(&i.id)
+            .verification
+            .unwrap()
+            .signature_checked_on_chain
+    );
+}
+
+#[test]
+fn tee_malformed_signatures_rejected_before_any_write() {
+    let mut c = fresh();
+    c.config.require_tee_signature = true;
+    let i = create(&mut c, UNIT, 60);
+    for signature in [
+        "not-hex".to_string(),
+        "00".repeat(64),
+        format!("{}02", "00".repeat(64)),
+    ] {
+        let mut v = verification("pass");
+        v.signature = signature;
+        call("attester.testnet", 0, START);
+        let panic =
+            catch_unwind(AssertUnwindSafe(|| c.record_verification(i.id.clone(), v))).unwrap_err();
+        let message = panic
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| panic.downcast_ref::<&str>().copied())
+            .unwrap_or("");
+        assert!(message.contains("tee signature invalid"));
+        assert!(c.invoice(&i.id).verification.is_none());
+    }
+}
+
+#[test]
+#[should_panic(expected = "tee signature invalid")]
+fn tee_requires_ecdsa() {
+    let mut c = fresh();
+    c.config.require_tee_signature = true;
+    let i = create(&mut c, UNIT, 60);
+    let mut v = verification("pass");
+    v.signing_algo = "mock".into();
+    call("attester.testnet", 0, START);
+    c.record_verification(i.id, v);
+}
+
+#[test]
+fn verification_json_defaults_checked_flag() {
+    let mut value = near_sdk::serde_json::to_value(verification("pass")).unwrap();
+    value
+        .as_object_mut()
+        .unwrap()
+        .remove("signature_checked_on_chain");
+    let v: Verification = near_sdk::serde_json::from_value(value).unwrap();
+    assert!(!v.signature_checked_on_chain);
 }

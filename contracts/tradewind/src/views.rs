@@ -40,6 +40,9 @@ pub struct Roles {
 
 #[near]
 impl Contract {
+    pub fn get_tee_signers(&self) -> Vec<String> {
+        self.tee_signers.iter().collect()
+    }
     pub fn get_invoice(&self, id: String) -> Option<Invoice> {
         self.invoices.get(&id)
     }
@@ -72,7 +75,7 @@ impl Contract {
         let b = self.buyer(&account_id);
         BuyerRecordView {
             rate_bps: math::advance_rate(&b, &self.config),
-            buyer_limit: U128(math::buyer_limit(&b, &self.config)),
+            buyer_limit: U128(self.buyer_limit(&account_id, &b)),
             record: b,
         }
     }
@@ -100,26 +103,42 @@ impl Contract {
             p.exporter_rest = U128(t.exporter_rest);
         }
         let reason = if self.config.paused {
-            Some("paused")
+            Some("contract paused".to_string())
         } else if i.status != InvoiceStatus::Accepted {
-            Some("invalid status")
+            Some("invoice must be Accepted".to_string())
         } else if !i.verification.as_ref().is_some_and(|v| v.verdict == "pass") {
-            Some("verification required")
+            Some("verification not passed".to_string())
         } else if i.due_at.is_none_or(|d| env::block_timestamp() >= d.0) {
-            Some("invoice due")
+            Some("invoice due".to_string())
+        } else if b.frozen {
+            let default = self.invoices_by_buyer.get(&i.buyer).and_then(|ids| {
+                ids.iter()
+                    .filter_map(|id| self.invoices.get(id))
+                    .find(|invoice| invoice.was_defaulted)
+                    .map(|invoice| invoice.id)
+            });
+            Some(
+                default
+                    .map(|id| format!("buyer frozen after default on {id}"))
+                    .unwrap_or_else(|| "buyer frozen after default".into()),
+            )
         } else if p.rate_bps == 0 {
-            Some("buyer not eligible")
+            Some("buyer not eligible: negative score or zero advance rate".to_string())
         } else if terms.is_none() {
-            Some("fees exceed face")
+            Some("fees exceed face".to_string())
         } else if b
             .open_principal
             .0
             .checked_add(p.advance.0)
-            .is_none_or(|n| n > math::buyer_limit(&b, &self.config))
+            .is_none_or(|n| n > self.buyer_limit(&i.buyer, &b))
         {
-            Some("buyer exposure")
+            Some(format!(
+                "buyer exposure limit reached: {} open of {}",
+                crate::visual::dollars(b.open_principal.0),
+                crate::visual::dollars(self.buyer_limit(&i.buyer, &b))
+            ))
         } else if p.advance.0 > self.pool.idle.0 {
-            Some("pool liquidity")
+            Some("pool idle liquidity too low".to_string())
         } else if p.advance.0
             > math::mul_div_floor(
                 self.pool.total_assets(),
@@ -127,13 +146,13 @@ impl Contract {
                 BPS,
             )
         {
-            Some("single advance cap")
+            Some("single advance cap".to_string())
         } else if p.advance.0 == 0 {
-            Some("zero advance")
+            Some("zero advance".to_string())
         } else {
             None
         };
-        p.reason = reason.map(str::to_string);
+        p.reason = reason;
         p.eligible = p.reason.is_none();
         p
     }
