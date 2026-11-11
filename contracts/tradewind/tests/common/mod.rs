@@ -1,6 +1,5 @@
 #![allow(unused_must_use, dead_code)]
 //! Shared by the sandbox tests and local demo; never connects to a public RPC.
-#![allow(dead_code)]
 
 use anyhow::{bail, ensure, Context, Result};
 use near_workspaces::{
