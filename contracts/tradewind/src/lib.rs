@@ -6,7 +6,7 @@ use near_contract_standards::{
 use near_sdk::{
     assert_one_yocto,
     borsh::BorshSerialize,
-    collections::{LookupMap, LookupSet, Vector},
+    collections::{LookupMap, LookupSet, UnorderedSet, Vector},
     env, ext_contract,
     json_types::{U128, U64},
     near,
@@ -24,7 +24,9 @@ pub mod payments;
 pub mod pool;
 pub mod record;
 mod share;
+mod tee;
 pub mod views;
+mod visual;
 
 use config::Config;
 use invoice::{Invoice, InvoiceStatus};
@@ -50,6 +52,8 @@ enum StorageKey {
     PendingRedeems,
     ExporterSet { hash: Vec<u8> },
     BuyerSet { hash: Vec<u8> },
+    TeeSigners,
+    BuyerLimitOverrides,
 }
 
 #[near(contract_state)]
@@ -76,6 +80,8 @@ pub struct Contract {
     next_invoice_seq: u64,
     // Prevent unregistering shares while a failed redemption may need to re-mint.
     pending_redeems: LookupMap<AccountId, u32>,
+    tee_signers: UnorderedSet<String>,
+    buyer_limit_overrides: LookupMap<AccountId, u128>,
 }
 
 #[allow(dead_code)]
@@ -125,6 +131,8 @@ impl Contract {
             claimable: LookupMap::new(StorageKey::Claimable),
             unattributed: Vector::new(StorageKey::Unattributed),
             pending_redeems: LookupMap::new(StorageKey::PendingRedeems),
+            tee_signers: UnorderedSet::new(StorageKey::TeeSigners),
+            buyer_limit_overrides: LookupMap::new(StorageKey::BuyerLimitOverrides),
         }
     }
 }
@@ -144,6 +152,11 @@ impl Contract {
     }
     fn buyer(&self, account: &AccountId) -> BuyerRecord {
         self.buyers.get(account).unwrap_or_default()
+    }
+    fn buyer_limit(&self, account: &AccountId, record: &BuyerRecord) -> u128 {
+        self.buyer_limit_overrides
+            .get(account)
+            .unwrap_or_else(|| math::buyer_limit(record, &self.config))
     }
     fn send_usdc(&self, to: AccountId, amount: u128) -> Promise {
         ext_usdc::ext(self.config.usdc.clone())

@@ -14,7 +14,10 @@ export async function makeApproveCard(s: AutomationStore, d: ApprovalDependencie
   // Unverified development links are notification-only and never authorise spending.
   const optedIn = !!link?.verified && !!d.botAccount && approver === d.botAccount;
   const bound = { invoice_id: i.id, terms_hash: i.terms_hash, amount_e6: p.advance, tg_user_id: link?.tg_user_id ?? "" };
-  const tokens = link ? { approve: s.issueCallback({ ...bound, action: "approve" }), skip: s.issueCallback({ ...bound, action: "skip" }) } : undefined;
+  const tokens = s.transaction(() => {
+    if (changed) s.revokeCallbacks(i.id);
+    return link ? { approve: s.issueCallback({ ...bound, action: "approve" }), skip: s.issueCallback({ ...bound, action: "skip" }) } : undefined;
+  });
   const card = advanceReady(i, p, b, d.base, tokens, changed);
   if (!optedIn) card.buttons = card.buttons.map(button => button.text === "✅ Approve advance" ? { text: button.text, url: `${d.base}/app/i/${encodeURIComponent(i.id)}?advance=1` } : button);
   return card;

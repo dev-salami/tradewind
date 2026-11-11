@@ -5,6 +5,18 @@ const stores: AutomationStore[] = [];
 const create = () => { const s = openAutomationStore(":memory:"); stores.push(s); return s; };
 afterEach(() => { for (const s of stores.splice(0)) s.db.close(); });
 describe("callback/code lifecycle", () => {
+  it("revokes every unused invoice token, retaining used timestamps and other invoices", () => {
+    const s = create();
+    const data = { invoice_id: "TW-0042", action: "approve" as const, terms_hash: "terms", amount_e6: "8000000", tg_user_id: "123" };
+    const used = s.issueCallback(data, 0);
+    s.consumeCallback(used, "123", 1);
+    const pending = [s.issueCallback(data, 0), s.issueCallback({ ...data, action: "skip" }, 0), s.issueCallback({ ...data, tg_user_id: "456" }, 0)];
+    const other = s.issueCallback({ ...data, invoice_id: "OTHER" }, 0);
+    s.revokeCallbacks(data.invoice_id, 2);
+    expect(s.callback(used)?.used_at).toBe(1);
+    for (const token of pending) expect(s.callback(token)?.used_at).toBe(2);
+    expect(s.callback(other)?.used_at).toBeNull();
+  });
   it("uses random 128-bit codes with one-time consumption and 10-minute expiry", () => {
     const s = create(), code = s.issueCode("sample.testnet", "buyer", false, 1000);
     expect(code).toMatch(/^[0-9a-f]{32}$/);
