@@ -10,15 +10,17 @@ export function useView<T>(method: string, args: Record<string, unknown> = {}, e
   const { callView, revision } = useWallet();
   const key = JSON.stringify(args);
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<{ value?: T; error?: string; loading: boolean }>({ loading: true });
+  const request = JSON.stringify([method, key, contract, revision, attempt]);
+  const [state, setState] = useState<{ request: string; callView: typeof callView; value?: T; error?: string }>({ request: "", callView });
   useEffect(() => {
     let alive = true;
-    if (!enabled || isFixtureMode()) { setState({ loading: false }); return; }
-    setState({ loading: true });
-    void callView<T>(method, JSON.parse(key), contract).then(value => { if (alive) setState({ value, loading: false }); }).catch(e => { if (alive) setState({ error: String(e), loading: false }); });
+    if (!enabled || isFixtureMode()) return;
+    void callView<T>(method, JSON.parse(key), contract).then(value => { if (alive) setState({ request, callView, value }); }).catch(e => { if (alive) setState({ request, callView, error: String(e) }); });
     return () => { alive = false; };
-  }, [callView, method, key, enabled, contract, revision, attempt]);
-  return { ...state, retry: () => setAttempt(n => n + 1) };
+  }, [callView, method, key, enabled, contract, request]);
+  const active = enabled && !isFixtureMode();
+  const current = active && state.request === request && state.callView === callView;
+  return { value: current ? state.value : undefined, error: current ? state.error : undefined, loading: active && !current, retry: () => setAttempt(n => n + 1) };
 }
 export function ReadState({ loading, error, retry }: { loading: boolean; error?: string; retry?(): void }) {
   return <>{loading && <p role="status">Loading…</p>}{error && <div role="alert"><p>{error}</p>{retry && <button className="tw-ghost" onClick={retry}>Retry read</button>}</div>}</>;

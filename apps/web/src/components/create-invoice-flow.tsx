@@ -8,30 +8,43 @@ import { createInvoiceTx, parseAmount } from "@/lib/tx";
 import { invoiceCreatedId, newestMatchingInvoice, type TxOutcome } from "@/lib/wallet-logic";
 import { useWallet } from "./wallet-provider";
 import { WriteButton } from "./write-controls";
+import { useClientReady } from "./client-ready";
 type Draft = { draft_id: string; doc_hash: string; exporter: string };
 type Fields = { buyer: string; buyer_label: string; invoice_number: string; total: string; tenor_days: string };
 interface Pending { draft: Draft; account: string; network: string; core: string; existing: string[]; invoiceId?: string }
 const KEY = "tw:create-pending";
 export function CreateInvoiceFlow({ draft, fields, busy }: { draft?: Draft; fields: Fields; busy: boolean }) {
+  const ready = useClientReady();
+  return ready ? <CreateInvoiceControls draft={draft} fields={fields} busy={busy} /> : null;
+}
+function CreateInvoiceControls({ draft, fields, busy }: { draft?: Draft; fields: Fields; busy: boolean }) {
   const { accountId, callView, revision } = useWallet();
-  const [pending, setPending] = useState(false), [created, setCreated] = useState(""), [error, setError] = useState(""), [checking, setChecking] = useState(false), [verdict, setVerdict] = useState("");
+  const [pending, setPending] = useState(() => typeof window !== "undefined" && !!sessionStorage.getItem(KEY)), [created, setCreated] = useState(""), [error, setError] = useState(""), [checking, setChecking] = useState(false), [verdict, setVerdict] = useState("");
   const lock = useRef(false);
-  const finish = useCallback(async (result?: TxOutcome) => {
-    if (lock.current || !accountId) return;
+  const recover = useCallback(async (result?: TxOutcome) => {
+    if (!accountId) return;
     const stored = sessionStorage.getItem(KEY);
     if (!stored) return;
+    const p: Pending = JSON.parse(stored);
+    if (p.account !== accountId || p.network !== network() || p.core !== coreId()) throw new Error("Connect the original exporter on the original network to resume this draft");
+    let id = invoiceCreatedId(result || {}) || p.invoiceId;
+    if (!id) {
+      const invoices = await callView<Invoice[]>("invoices_by_exporter", { account_id: accountId });
+      id = newestMatchingInvoice(invoices, p.draft.doc_hash, p.existing)?.id;
+    }
+    if (!id) throw new Error("Created invoice not found yet. If you cancelled in the wallet, discard this pending draft; otherwise retry recovery without signing again.");
+    if (sessionStorage.getItem(KEY) !== stored) return;
+    p.invoiceId = id; sessionStorage.setItem(KEY, JSON.stringify(p));
+    return { p, id, current: await callView<Invoice>("get_invoice", { id }) };
+  }, [accountId, callView]);
+  const verify = useCallback(async (recovered: Awaited<ReturnType<typeof recover>>) => {
+    if (!recovered || lock.current) return;
+    // A slow read must not verify a draft that was discarded or replaced meanwhile.
+    if (sessionStorage.getItem(KEY) !== JSON.stringify(recovered.p)) return;
     lock.current = true; setChecking(true); setError("");
+    const { p, id, current } = recovered;
+    setCreated(id);
     try {
-      const p: Pending = JSON.parse(stored);
-      if (p.account !== accountId || p.network !== network() || p.core !== coreId()) throw new Error("Connect the original exporter on the original network to resume this draft");
-      let id = invoiceCreatedId(result || {}) || p.invoiceId;
-      if (!id) {
-        const invoices = await callView<Invoice[]>("invoices_by_exporter", { account_id: accountId });
-        id = newestMatchingInvoice(invoices, p.draft.doc_hash, p.existing)?.id;
-      }
-      if (!id) throw new Error("Created invoice not found yet. If you cancelled in the wallet, discard this pending draft; otherwise retry recovery without signing again.");
-      p.invoiceId = id; sessionStorage.setItem(KEY, JSON.stringify(p)); setCreated(id);
-      const current = await callView<Invoice>("get_invoice", { id });
       if (current.status === "Created") {
         const response = await fetch(`/api/invoices/${encodeURIComponent(id)}/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft_id: p.draft.draft_id }) });
         const body = await response.json();
@@ -41,12 +54,19 @@ export function CreateInvoiceFlow({ draft, fields, busy }: { draft?: Draft; fiel
       sessionStorage.removeItem(KEY); setPending(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Invoice recovery failed"); }
     finally { lock.current = false; setChecking(false); }
-  }, [accountId, callView]);
+  }, []);
+  async function finish(result?: TxOutcome) {
+    if (lock.current) return;
+    setChecking(true); setError("");
+    try { await verify(await recover(result)); }
+    catch (e) { setError(e instanceof Error ? e.message : "Invoice recovery failed"); }
+    finally { setChecking(false); }
+  }
   useEffect(() => {
-    const p = sessionStorage.getItem(KEY);
-    setPending(!!p);
-    if (p && accountId) void finish();
-  }, [accountId, revision, finish]);
+    let alive = true;
+    if (accountId && sessionStorage.getItem(KEY)) void recover().then(value => { if (alive) void verify(value); }).catch(e => { if (alive) setError(e instanceof Error ? e.message : "Invoice recovery failed"); });
+    return () => { alive = false; };
+  }, [accountId, revision, recover, verify]);
   return <div className="tw-stack">
     <WriteButton disabled={!draft || busy || checking || pending || !!created} build={async () => {
       if (!draft || !accountId) throw new Error("Connect wallet and check a PDF first");

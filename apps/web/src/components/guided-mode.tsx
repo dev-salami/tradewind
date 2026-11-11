@@ -29,16 +29,16 @@ export function GuidedNavLink({ active }: { active: boolean }) {
 export function GuidedMode() {
   const [checked, setChecked] = useState(false);
   const available = useGuidedAvailability(() => setChecked(true));
-  const [progress, setProgress] = useState<GuidedProgress>(emptyGuidedProgress);
-  const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
+  const [restored] = useState(() => {
+    try { return { progress: typeof window === "undefined" ? emptyGuidedProgress() : resumeGuided(window.sessionStorage), warning: "" }; }
+    catch { return { progress: emptyGuidedProgress(), warning: "Session storage unavailable; keep this page open to retain progress." }; }
+  });
+  const [progress, setProgress] = useState<GuidedProgress>(restored.progress);
+  const ready = true;
+  const [busy, setBusy] = useState(false);
   const [face, setFace] = useState(""), [amount, setAmount] = useState("");
-  const [error, setError] = useState(""), [storageWarning, setStorageWarning] = useState("");
+  const [error, setError] = useState(""), [storageWarning, setStorageWarning] = useState(restored.warning);
   const running = useRef(false);
-  useEffect(() => {
-    try { setProgress(resumeGuided(window.sessionStorage)); }
-    catch { setStorageWarning("Session storage unavailable; keep this page open to retain progress."); }
-    setReady(true);
-  }, []);
   function save(value: GuidedProgress) {
     setProgress(value);
     try { window.sessionStorage.setItem(GUIDED_STORAGE_KEY, JSON.stringify(value)); }

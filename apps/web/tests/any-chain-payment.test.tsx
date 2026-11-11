@@ -57,3 +57,15 @@ it("shows deposit address and QR but not confirmed delivery for unsettled SUCCES
   expect(screen.getByText(/Required deposit memo/)).toHaveTextContent("123");
   expect(screen.queryByRole("button", { name: "Get deposit address" })).not.toBeInTheDocument();
 });
+it("restores a saved deposit without requesting another quote", async () => {
+  vi.stubEnv("NEXT_PUBLIC_NEAR_NETWORK", "mainnet");
+  const quote = { pid: "saved", dry: false, preview: false, depositAddress: refund, amountIn: "2020000", amountInFormatted: "2.02", minAmountIn: "2000000", amountOut: "2000000", timeEstimate: 120, deadline: "2026-11-11T00:30:00Z", path: "A" };
+  sessionStorage.setItem(`payment:mainnet:${invoice().id}`, JSON.stringify({ quote, chain: "Base", refund }));
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ status: "PENDING_DEPOSIT", label: "Waiting for deposit", settlement: { confirmed: false } }));
+  vi.stubGlobal("fetch", fetcher); show(false, false, true);
+  expect(screen.getByLabelText("USDC amount")).toHaveValue("2.000000");
+  expect(screen.getByLabelText("Refund address on Base")).toHaveValue(refund);
+  expect(await screen.findByAltText("Deposit address QR")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Get deposit address" })).toBeNull();
+  expect(fetcher.mock.calls.every(([url]) => String(url).endsWith("/status"))).toBe(true);
+});

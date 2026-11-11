@@ -6,6 +6,7 @@ import { depositTx, redeemTx, parseAmount } from "@/lib/tx";
 import { useWallet } from "./wallet-provider";
 import { ReadState, useView, WriteButton } from "./write-controls";
 import { StorageRegistration } from "./account-flows";
+import { PoolTokenIcon } from "./pool-token-icon";
 export function PoolFlows() {
   const { accountId, callView } = useWallet();
   const [amount, setAmount] = useState(""), [shares, setShares] = useState("");
@@ -15,7 +16,7 @@ export function PoolFlows() {
   let units = "";
   try { units = parseAmount(shares); } catch { /* Incomplete editable amount. */ }
   const preview = useView<string>("preview_redeem", { shares: units }, !!units);
-  return <div className="tw-form"><ReadState loading={balance.loading || allowed.loading} error={balance.error || allowed.error || value.error} />{!accountId && <p>Connect wallet to view your position.</p>}{balance.value !== undefined && <p>{formatUsd(balance.value, { decimals: 6 }).replace("$", "")} twPOOL · value {value.value ? formatUsd(value.value, { decimals: 6 }) : "—"} USDC</p>}
+  return <div className="tw-form"><ReadState loading={balance.loading || allowed.loading} error={balance.error || allowed.error || value.error} />{!accountId && <p>Connect wallet to view your position.</p>}{balance.value !== undefined && <p><PoolTokenIcon /> {formatUsd(balance.value, { decimals: 6 }).replace("$", "")} twPOOL · value {value.value ? formatUsd(value.value, { decimals: 6 }) : "—"} USDC</p>}
     <p className="tw-small tw-muted">Wallets can display twPOOL. Token contract: {coreId() || "not configured"}. Token decimals: 6.</p><StorageRegistration />
     {allowed.value === false && <p>LP access by invitation during MVP</p>}
     <label>Deposit USDC<input inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></label><WriteButton disabled={!allowed.value} build={async () => { if (!await callView<boolean>("is_lp_allowed", { account_id: accountId })) throw new Error("LP access by invitation during MVP"); return depositTx(usdcId(), coreId(), parseAmount(amount)); }}>Deposit</WriteButton>

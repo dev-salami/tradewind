@@ -1,4 +1,33 @@
 @import "tailwindcss";
+.tw-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tw-dropzone { display: grid; gap: 10px; width: 100%; padding: 28px 18px; border: 2px dashed var(--mute); border-radius: 18px; background: var(--o-4); text-align: center; overflow-wrap: anywhere; }
+.tw-dropzone:hover, .tw-dropzone-active { border-color: var(--o); background: var(--o-3); }
+.tw-dropzone:disabled { opacity: .6; cursor: wait; }
+.tw-menu-button { display: none !important; }
+.tw-sankey { display: block; width: 100%; height: auto; overflow: visible; }
+.tw-sankey-ribbon { transform-origin: left center; animation: tw-flow-in 700ms ease-out both; }
+@keyframes tw-flow-in { from { opacity: 0; transform: scaleX(.05); } to { transform: scaleX(1); } }
+.tw-nft-preview { display: block; width: min(100%, 480px); height: auto; border-radius: 20px; }
+.tw-pool-token { display: inline-block; vertical-align: middle; flex: none; border-radius: 50%; }
+.tw-first-steps { display: grid; gap: 18px; }
+.tw-first-steps p { color: var(--mute); margin-top: 4px; }
+.tw-mainnet-stats { padding: 24px; background: var(--o-4); border-radius: 24px; }
+.tw-mainnet-stats dl { display: flex; flex-wrap: wrap; gap: 20px 48px; }
+.tw-mainnet-stats dd { margin: 4px 0 0; font-size: 26px; font-variant-numeric: tabular-nums; }
+@media (max-width: 639px) {
+  .tw .tw-menu-button { display: inline-flex !important; margin-left: auto; }
+  .tw .tw-top { flex-wrap: wrap; }
+  .tw .tw-nav { display: none; width: 100%; border-radius: 18px; overflow: visible; }
+  .tw .tw-nav-open { display: flex; flex-direction: column; align-items: stretch; }
+  .tw .tw-tools { order: 2; flex-basis: 100%; justify-content: flex-end; flex-wrap: wrap; min-width: 0; }
+  .tw .tw-nav { order: 3; }
+  .tw .tw-main, .tw .tw-stack, .tw .tw-form { min-width: 0; }
+  .tw .tw-tools button { max-width: 100%; overflow-wrap: anywhere; }
+  .tw .tw-tools > details { min-width: 0; max-width: 100%; }
+  .tw .tw-tools summary, .tw .tw-toolbar > * { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .tw h1 { overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) { .tw-sankey-ribbon { animation: none; } }
 .tw-advance-focus { outline: 3px solid #00c08b; outline-offset: 10px; border-radius: 8px; scroll-margin-top: 100px; }
 .tw-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 1000; width: min(420px, calc(100vw - 32px)); max-height: 50vh; overflow-y: auto; font-family: system-ui, sans-serif; color: #0b1f33; --w: #fff; --line: #ebebeb; }
 .tw-toasts .tw-card { background: white; padding: 16px; margin-top: 8px; box-shadow: 0 4px 20px #0b1f3326; }
