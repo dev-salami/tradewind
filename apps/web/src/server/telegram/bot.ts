@@ -1,5 +1,6 @@
 import { Bot, webhookCallback } from "grammy";
-import { escapeHtml, type Invoice, type Pool } from "@tradewind/core";
+import { escapeHtml, formatUsd, formatSharePrice, type Invoice, type Pool } from "@tradewind/core";
+import { telegramApiRoot } from "./config";
 import { telegramStore } from "./store";
 import { approvalDependencies } from "./dependencies";
 import { handleCallback } from "./callbacks";
@@ -10,20 +11,20 @@ export function getBot() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return null;
   if (instance) return instance;
-  const bot = new Bot(token, { client: { timeoutSeconds: 15 } });
+  const bot = new Bot(token, { client: { apiRoot: telegramApiRoot(), timeoutSeconds: 15 } });
   bot.command("start", async ctx => {
     if (ctx.chat.type !== "private" || !ctx.from) { await ctx.reply("Link Telegram in a private chat."); return; }
     const code = ctx.match.trim();
     const ok = /^[a-f0-9]{32}$/.test(code) && telegramStore().consumeCode(code, String(ctx.from.id), String(ctx.chat.id));
-    await ctx.reply(ok ? "Telegram linked. Development links are unverified; approvals require your wallet." : "Link expired or invalid. Request a new link in settings.");
+    await ctx.reply(ok ? "Telegram linked for invoice notifications and reminders. Advance approvals still need wallet opt-in in app settings; unverified development links are notifications-only. Buyer payments always require your wallet." : "Link expired or invalid. Request a new link in settings.");
   });
   bot.command("stop", async ctx => {
     if (!ctx.from) return;
     const s = telegramStore(), user = String(ctx.from.id);
     s.transaction(() => {
+      s.db.prepare("UPDATE notifications_outbox SET status='skipped_unlinked' WHERE status='pending' AND (chat_id=? OR near_account IN (SELECT near_account FROM telegram_links WHERE tg_user_id=?))").run(String(ctx.chat.id), user);
       s.db.prepare("DELETE FROM telegram_links WHERE tg_user_id=?").run(user);
       s.db.prepare("UPDATE telegram_callbacks SET used_at=? WHERE tg_user_id=? AND used_at IS NULL").run(Date.now(), user);
-      s.db.prepare("UPDATE notifications_outbox SET status='skipped_unlinked' WHERE chat_id=? AND status='pending'").run(String(ctx.chat.id));
     });
     await ctx.reply("Unlinked. Revoke on-chain Telegram approvals in app settings if enabled.");
   });
@@ -36,7 +37,7 @@ export function getBot() {
     for (let from = 0; ; from += 100) { const batch = await view<Invoice[]>("list_invoices", { from_index: String(from), limit: 100 }); invoices.push(...batch); if (batch.length < 100) break; }
     await ctx.reply(invoices.filter(i => accounts.has(i.exporter) || accounts.has(i.buyer)).map(i => `${escapeHtml(i.id)} · ${escapeHtml(i.status)}`).join("\n") || "No invoices yet.", { parse_mode: "HTML" });
   });
-  bot.command("pool", async ctx => { const p = await view<Pool>("get_pool"); await ctx.reply(`Pool assets (USDC base units): ${p.total_assets}\nShare price (1e6): ${p.share_price_e6}`); });
+  bot.command("pool", async ctx => { const p = await view<Pool>("get_pool"); await ctx.reply(`Pool assets: ${formatUsd(p.total_assets).replace("$", "")} USDC · Share price: ${formatSharePrice(p.share_price_e6)}`); });
   bot.command("help", ctx => ctx.reply("/start <code> — link from app settings\n/invoices — your invoices\n/pool — pool totals\n/stop — unlink\n/help — commands\nBuyer payments always require your wallet."));
   bot.on("callback_query:data", async ctx => {
     try {
