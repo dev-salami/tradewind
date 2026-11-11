@@ -17,6 +17,7 @@ export async function recordVerification(id: string, result: VerificationResult)
   const { verdict, model_id, request_hash, response_hash, signature, signing_address, signing_algo, chat_id } = result;
   const outcome = await account.functionCall({ contractId: e.CORE_CONTRACT_ID, methodName: "record_verification", args: { id, v: { verdict, model_id, request_hash, response_hash, signature, signing_address, signing_algo, chat_id, at: "0" } }, gas: 30_000_000_000_000n, attachedDeposit: 0n });
   const hash = outcome.transaction.hash;
-  store().putTx(hash, e.ATTESTER_ACCOUNT_ID, id, "record_verification", "verify");
+  // Best effort: a local DB failure must not hide a completed on-chain write.
+  try { store().putTx(hash, e.ATTESTER_ACCOUNT_ID, id, "record_verification", "verify"); } catch { /* receipt link only */ }
   return hash;
 }
