@@ -9,10 +9,11 @@ import { withAccountLock } from "../src/server/guided/signer";
 import { samplePdf } from "../src/server/guided/sample-pdf";
 import { createHash } from "node:crypto";
 
-const mocks = vi.hoisted(() => ({ call: vi.fn(), view: vi.fn(), key: vi.fn(), connect: vi.fn(), audit: vi.fn(), putVerification: vi.fn(), verify: vi.fn() }));
+const mocks = vi.hoisted(() => ({ call: vi.fn(), view: vi.fn(), key: vi.fn(), connect: vi.fn(), audit: vi.fn(), putTx: vi.fn(), putVerification: vi.fn(), verify: vi.fn() }));
 vi.mock("near-api-js", () => ({
   Account: class {
     constructor(_connection: unknown, readonly id: string) {}
+    get accountId() { return this.id; }
     functionCall(args: unknown) { return mocks.call(this.id, args); }
     viewFunction(args: unknown) { return mocks.view(this.id, args); }
   },
@@ -20,7 +21,7 @@ vi.mock("near-api-js", () => ({
   keyStores: { InMemoryKeyStore: class { setKey(...args: unknown[]) { return mocks.key(...args); } } },
   connect: mocks.connect,
 }));
-vi.mock("../src/server/db", () => ({ store: () => ({ audit: mocks.audit, putVerification: mocks.putVerification }) }));
+vi.mock("../src/server/db", () => ({ store: () => ({ audit: mocks.audit, putTx: mocks.putTx, putVerification: mocks.putVerification }) }));
 vi.mock("../src/server/nearai/verify-flow", () => ({ runVerification: mocks.verify }));
 
 const routes = [invoicePost, acceptPost, advancePost, payPost, statusPost];
@@ -123,6 +124,8 @@ describe("guided transaction methods", () => {
     expect(mocks.call).toHaveBeenCalledWith("attester.testnet", expect.objectContaining({ methodName: "record_verification", args: { id: invoice.id, v: { verdict: "pass", model_id: proof.model_id, request_hash: proof.request_hash, response_hash: proof.response_hash, signature: proof.signature, signing_address: proof.signing_address, signing_algo: proof.signing_algo, chat_id: proof.chat_id, at: "0" } }, gas: 30_000_000_000_000n, attachedDeposit: 0n }));
     expect(await response.json()).toEqual({ invoice_id: invoice.id, verdict: "pass", mock: true, tx_hashes: ["create_invoice-hash", "record_verification-hash"], tx_links: ["https://testnet.nearblocks.io/txns/create_invoice-hash", "https://testnet.nearblocks.io/txns/record_verification-hash"] });
     expect(mocks.putVerification).toHaveBeenLastCalledWith(invoice.id, proof, "record_verification-hash");
+    expect(mocks.putTx).toHaveBeenCalledWith("create_invoice-hash", exporter, invoice.id, "create_invoice", "create");
+    expect(mocks.putTx).toHaveBeenCalledWith("record_verification-hash", "attester.testnet", invoice.id, "record_verification", "verify");
     expect(mocks.verify.mock.calls[0][0].pdfBytes.every((byte: number) => byte === 0)).toBe(true);
     for (const [, , detail] of mocks.audit.mock.calls) expect(JSON.parse(detail).actor).toBe("guided");
   });
@@ -169,6 +172,8 @@ describe("guided transaction methods", () => {
     expect(transfer).toMatchObject({ contractId: "usdc.testnet", methodName: "ft_transfer_call", args: { receiver_id: "core.testnet", amount: "10000000" }, gas: 300_000_000_000_000n, attachedDeposit: 1n });
     expect(JSON.parse(transfer.args.msg)).toEqual({ action: "repay", invoice_id: invoice.id, payment_ref: expect.stringMatching(/^guided:[0-9a-f-]{36}$/) });
     expect((await response.json()).tx_hashes).toEqual(["mint-hash", "ft_transfer_call-hash"]);
+    expect(mocks.putTx).toHaveBeenCalledWith("mint-hash", buyer, invoice.id, "mint", "other");
+    expect(mocks.putTx).toHaveBeenCalledWith("ft_transfer_call-hash", buyer, invoice.id, "ft_transfer_call", "repay");
   });
   it("supports minimum-size partial payments without minting when funded", async () => {
     payments("1000000");

@@ -6,6 +6,7 @@ import { assertSameOrigin } from "../auth/session";
 import { store } from "../db";
 import { ApiError, jsonError } from "../errors";
 import { recordVerification } from "../near/attester";
+import { methodKind } from "../near/tx-metadata";
 import { formSchema } from "../nearai/prompt";
 import { runVerification } from "../nearai/verify-flow";
 import { tokenBucket } from "../rate-limit";
@@ -47,11 +48,12 @@ export async function guidedPost(action: Action, request: Request): Promise<Resp
     const parsed = (action === "invoice" ? invoiceBody : action === "pay" ? payBody : action === "status" ? z.object({}).strict() : idBody).safeParse(body);
     if (!parsed.success) throw new ApiError("Invalid guided payload");
     const input = parsed.data;
-    async function call(account: Account, contractId: string, methodName: string, args: object, attachedDeposit = 0n, gas = GAS) {
+    async function call(account: Account, contractId: string, methodName: string, args: Record<string, unknown>, attachedDeposit = 0n, gas = GAS) {
       guidedConfig();
       const outcome = await account.functionCall({ contractId, methodName, args, gas, attachedDeposit });
       const hash = outcome.transaction.hash;
       tx_hashes.push(hash);
+      store().putTx(hash, account.accountId, invoice_id || null, methodName, methodKind(methodName, args));
       audit(methodName, invoice_id, { tx_hash: hash, tx_link: links([hash])[0] });
       return outcome;
     }
@@ -70,6 +72,7 @@ export async function guidedPost(action: Action, request: Request): Promise<Resp
           if (typeof outcome.status !== "object" || !("SuccessValue" in outcome.status)) throw new ApiError("Invoice creation failed", 502);
           const created = JSON.parse(Buffer.from(String(outcome.status.SuccessValue), "base64").toString("utf8")) as Invoice;
           invoice_id = idBody.parse({ invoice_id: created.id }).invoice_id;
+          store().putTx(outcome.transaction.hash, account.accountId, invoice_id, "create_invoice", "create");
           audit("guided_invoice", invoice_id, { doc_hash, tx_hashes });
         });
         const result = await runVerification({ invoiceId: invoice_id, pdfBytes: bytes, formFields: formSchema.parse({ exporter: e.exporter, buyer: e.buyer, buyer_label: "Gulf Foods Trading (sample)", invoice_number: "TW-0042", face, tenor_days }) });

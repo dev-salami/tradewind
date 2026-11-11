@@ -19,6 +19,7 @@ describe("wallet metadata routes (no signing keys, no network)", () => {
       expect((await notify(request("/api/tx/notify", body))).status).toBe(200);
       expect(await (await notify(request("/api/tx/notify", body))).json()).toMatchObject({ invoice_id: "TW-0042" });
       expect(repo.db.prepare("SELECT tx_hash, invoice_id FROM tx_log").all()).toEqual([{ tx_hash: hash, invoice_id: "TW-0042" }]);
+      expect(repo.txsForInvoice("TW-0042")[0]).toMatchObject({ method: "ft_transfer_call", kind: "repay" });
     } finally { repo.db.close(); }
   });
   it("retains a pending hash on RPC outage and rejects malformed or wrong signer input", async () => {
