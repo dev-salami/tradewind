@@ -9,7 +9,7 @@ export default async function BuyerRecordPage({ params }: { params: Promise<{ ac
   const [record, invoices, config] = await Promise.all([source.getBuyerRecord(account), source.invoicesByBuyer(account), source.getConfig()]);
   if (!record) notFound();
   const defaulted = invoices.find(i => i.status === "Defaulted");
-  return <div className="tw-stack"><header><p className="tw-eyebrow">Public buyer record</p><h1>{invoices[0]?.buyer_label ?? account}</h1><p className="tw-muted tw-break">{account}{isFixtureMode() && " · team test wallet"}</p><p className="tw-muted tw-small">Record built from team test invoices{network() === "mainnet" && !isFixtureMode() ? " on mainnet" : " · sample preview, not mainnet evidence"}</p></header>
+  return <div className="tw-stack"><header><p className="tw-eyebrow">Public buyer record</p><h1>{invoices[0]?.buyer_label ?? account}</h1><p className="tw-muted tw-break">{account}{isFixtureMode() && " · sample account"}</p><p className="tw-muted tw-small">{isFixtureMode() ? "Sample preview · not mainnet evidence" : `Record built from on-chain invoices · ${network()}`}</p></header>
     {record.frozen && <div className="tw-alert" role="note">{defaulted ? `Not eligible: default on ${defaulted.id}` : "Not eligible: buyer frozen"} · Owner review required</div>}
     <div className="tw-kpis tw-kpis-3"><Kpi value={record.score} label="On-chain score" /><Kpi value={`${record.rate_bps / 100}%`} label="Current advance rate" /><Kpi value={formatUsd(record.buyer_limit)} label="Buyer exposure limit" /></div>
     <div className="tw-row-2"><Card title="Repayment record" action={<Pill value={record.frozen ? "Frozen" : "Eligible record"} tone={record.frozen ? "coral" : "green"} />}><table className="tw-table"><tbody>{[

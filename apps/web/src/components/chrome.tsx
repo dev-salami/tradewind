@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { LayoutGrid, Plus, Landmark, Users, Receipt, Settings } from "lucide-react";
 import type { NearNetwork } from "@tradewind/core";
 import { WalletMenu } from "./wallet-provider";
+import { GuidedNavLink } from "./guided-mode";
 const NAV = [
   { href: "/app", label: "Dashboard", icon: LayoutGrid },
   { href: "/app/new", label: "New invoice", icon: Plus },
@@ -22,7 +23,7 @@ export function AppShell({ children, network }: { children: React.ReactNode; net
       <nav className="tw-nav" aria-label="Main navigation">{NAV.map(({ href, label, icon: Icon }) => {
         const active = href === "/app" ? path === href || path.startsWith("/app/i/") : path.startsWith(href.split("/gulf-")[0]);
         return <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon size={15} aria-hidden="true" />{label}</Link>;
-      })}</nav>
+      })}{network !== "mainnet" && <GuidedNavLink active={path === "/app/guided"} />}</nav>
       <div className="tw-tools"><span className="tw-network">{network}</span>
         <WalletMenu />
       </div>
