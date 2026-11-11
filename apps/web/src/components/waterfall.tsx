@@ -3,10 +3,17 @@ import { waterfallWidths, WATERFALL_LANES } from "@/lib/waterfall";
 export function WaterfallBars({ split }: { split: WaterfallSplit }) {
   const widths = waterfallWidths(split);
   const lanes = WATERFALL_LANES.filter(l => BigInt(split[l.key]) > 0n);
+  const labels = ["LP pool principal", "LP yield", "Protocol fee", "Exporter remainder", "Overpaid · held for refund"];
   return <div className="tw-waterfall">
-    <div className="tw-waterfall-track" role="img" aria-label={lanes.map(l => `${l.label} ${formatUsd(split[l.key], { decimals: 6 })}`).join(", ") || "No payment allocated"}>
-      {WATERFALL_LANES.map((lane, i) => <span key={lane.key} data-testid="waterfall-segment" data-width={widths[i]} style={{ width: `${widths[i]}%`, background: lane.color }} />)}
-    </div>
-    <dl className="tw-split-legend">{WATERFALL_LANES.map(lane => <div key={lane.key}><dt><i style={{ background: lane.color }} />{lane.label}</dt><dd className="tw-money">{formatUsd(split[lane.key], { decimals: 6 })}</dd></div>)}</dl>
+    <svg className="tw-sankey" viewBox="0 0 640 330" role="img" aria-label={lanes.map(l => `${l.label} ${formatUsd(split[l.key], { decimals: 6 })}`).join(", ") || "No payment allocated"}>
+      <text x="12" y="20" fill="currentColor" fontSize="13">Incoming payment · {formatUsd(WATERFALL_LANES.reduce((sum, lane) => sum + BigInt(split[lane.key]), 0n))}</text>
+      {WATERFALL_LANES.map((lane, i) => {
+        const thickness = widths[i] * 1.6, start = 30 + widths.slice(0, i).reduce((sum, width) => sum + width * 1.6, 0);
+        const end = start + i * 30;
+        return <g key={lane.key}><path className="tw-sankey-ribbon" data-testid="waterfall-segment" data-width={widths[i]} data-thickness={thickness} d={`M12 ${start} H85 C190 ${start} 210 ${end} 345 ${end} H380 V${end + thickness} H345 C210 ${end + thickness} 190 ${start + thickness} 85 ${start + thickness} H12 Z`} fill={lane.color} opacity={thickness ? 0.85 : 0} />{thickness > 0 && <text x="395" y={end + thickness / 2} dominantBaseline="middle" fill="currentColor" fontSize="12"><tspan x="395" dy="-3">{labels[i]}</tspan><tspan x="395" dy="16">{formatUsd(split[lane.key], { decimals: 6 })}</tspan></text>}</g>;
+      })}
+      {!lanes.length && <text x="12" y="65" fill="currentColor">No payment allocated</text>}
+    </svg>
+    <dl className="tw-split-legend">{WATERFALL_LANES.map((lane, i) => <div key={lane.key}><dt><i style={{ background: lane.color }} />{labels[i]}</dt><dd className="tw-money">{formatUsd(split[lane.key], { decimals: 6 })}</dd></div>)}</dl>
   </div>;
 }

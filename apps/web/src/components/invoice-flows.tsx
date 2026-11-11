@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { formatUsd, validateRepayAmount, type AdvancePreview, type Invoice } from "@tradewind/core";
 import { network } from "@/lib/env-public";
 import { coreId, usdcId } from "@/lib/near";
@@ -7,6 +7,10 @@ import { acceptInvoiceTx, cancelInvoiceTx, requestAdvanceTx, repayDirectTx, pars
 import { useWallet } from "./wallet-provider";
 import { ReadState, useView, WriteButton } from "./write-controls";
 import { StorageRegistration } from "./account-flows";
+function subscribeLocation(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+}
 
 export function AcceptInvoice({ invoice }: { invoice: Invoice }) {
   const { accountId } = useWallet();
@@ -16,10 +20,11 @@ export function AcceptInvoice({ invoice }: { invoice: Invoice }) {
 export function AdvanceInvoice({ invoice }: { invoice: Invoice }) {
   const { accountId, callView } = useWallet();
   const panel = useRef<HTMLDivElement>(null);
-  const [highlight, setHighlight] = useState(false), [sent, setSent] = useState(false);
+  const highlight = useSyncExternalStore(subscribeLocation, () => new URLSearchParams(window.location.search).get("advance") === "1", () => false);
+  const [sent, setSent] = useState(false);
   const preview = useView<AdvancePreview>("preview_advance", { id: invoice.id });
   const storage = useView<unknown>("storage_balance_of", { account_id: accountId }, !!accountId, usdcId());
-  useEffect(() => { if (new URLSearchParams(window.location.search).get("advance") === "1") { setHighlight(true); panel.current?.scrollIntoView({ behavior: "smooth", block: "center" }); } }, []);
+  useEffect(() => { if (highlight) panel.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [highlight]);
   return <div ref={panel} id="advance" className={highlight ? "tw-advance-focus" : ""} tabIndex={-1}>
     <ReadState {...preview} />{preview.value && !preview.value.eligible && <p>{preview.value.reason}</p>}
     {accountId && accountId !== invoice.exporter && <p>Connect exporter {invoice.exporter} to request this advance.</p>}

@@ -8,6 +8,7 @@ import { AdvanceInvoice, CancelInvoice } from "@/components/invoice-flows";
 import { WorkerReceipts } from "@/components/worker-receipts";
 import { store } from "@/server/db";
 import { withWorkerTransactions } from "@/server/receipt-transactions";
+import { InvoiceNftPreview } from "@/components/invoice-nft-preview";
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const source = data();
@@ -25,6 +26,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       <p className={preview.eligible ? "tw-green" : "tw-muted"}>{preview.eligible ? "Eligible for advance" : preview.reason}</p><AdvanceInvoice invoice={invoice} /><CancelInvoice invoice={invoice} />
       <p className="tw-small">Terms <ShortHash value={invoice.terms_hash} /></p>
     </Card></div>
+    <Card title="Invoice NFT preview"><InvoiceNftPreview key={invoice.id} invoice={invoice} /></Card>
     <div className="tw-row-2"><Timeline invoice={invoice} txs={txs} /><AiProof invoice={invoice} sample={isFixtureMode()} /></div><PaymentList invoice={invoice} txs={txs} />
     <WorkerReceipts id={invoice.id} txs={txs} />
     <Card title="Buyer"><div className="tw-toolbar"><Link href={`/b/${id}`} className="tw-ghost">Buyer review ↗</Link><Link href={`/buyer/${invoice.buyer}`} className="tw-ghost">Buyer record ↗</Link></div></Card>

@@ -3,6 +3,7 @@ import { ArrowUpRight, FileCheck2, Fingerprint, Banknote } from "lucide-react";
 import { data, network, contractHolder } from "@/lib/data";
 import { TokenCard } from "@/components/invoice-panels";
 import { showcase } from "@/server/showcase";
+import { MainnetRuns } from "@/components/mainnet-runs";
 export default async function Landing() {
   const sample = await showcase();
   const invoice = sample ? await data().getInvoice(sample.invoiceId).catch(() => null) : null;
@@ -12,6 +13,7 @@ export default async function Landing() {
       { icon: Fingerprint, title: "Buyer accepts", body: "Your buyer confirms the terms. The invoice becomes an NFT on NEAR." },
       { icon: Banknote, title: "Get paid today", body: "The pool advances 70–85%. Your buyer pays from any chain; the contract splits the repayment." },
     ].map(({ icon: Icon, title, body }, i) => <article className="tw-card" key={title}><span className="tw-step-number">0{i + 1}</span><Icon size={28} /><h3>{title}</h3><p className="tw-muted">{body}</p></article>)}</div></section>
+    <MainnetRuns />
     <section className="tw-roadmap"><h2>The road ahead</h2><div>{["Now · testnet sandbox", "Pilot exporters", "Licensed partner · KYB", "Open pool"].map((label, i) => <span key={label}><b>0{i + 1}</b>{label}{i > 0 && <small>Roadmap</small>}</span>)}</div></section>
     <footer className="tw-landing-footer"><img src="/brand/tradewind-logo-white.png" alt="Tradewind" width="152" height="42" /><span>Built at NEAR HACKATHON</span><p>Illustrative pricing · unaudited MVP · sample data is not a real mainnet run</p></footer>
   </div>;

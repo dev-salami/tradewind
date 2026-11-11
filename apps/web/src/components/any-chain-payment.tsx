@@ -7,6 +7,7 @@ import { network } from "@/lib/env-public";
 import { parseAmount } from "@/lib/tx";
 import { ChainRing } from "./chain-ring";
 import { DirectPayment } from "./invoice-flows";
+import { useClientReady } from "./client-ready";
 
 interface Quote { pid?: string; dry: boolean; simulated?: boolean; preview: boolean; amountIn: string; amountInFormatted: string; minAmountIn: string; amountOut: string; depositAddress?: string; depositMemo?: string; deadline: string; timeEstimate: number; path: "A" | "B"; refundFee?: string; withdrawFee?: string; quoteResponse?: QuoteResponse }
 interface Progress { status: OneClickStatus; label: string; settlement: { confirmed: boolean }; swapDetails?: { originChainTxHashes: { hash: string }[]; nearTxHashes: string[] } }
@@ -18,28 +19,27 @@ async function json<T>(url: string, body?: unknown): Promise<T> {
 }
 const originExplorer = { Base: "https://basescan.org/tx/", Arbitrum: "https://arbiscan.io/tx/", Solana: "https://solscan.io/tx/", Ethereum: "https://etherscan.io/tx/" };
 export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, initialPart }: { invoice: Invoice; minPayment: string; liveAllowed: boolean; preview: boolean; initialPart: boolean }) {
+  const ready = useClientReady();
+  return ready ? <PaymentForm key={invoice.id} invoice={invoice} minPayment={minPayment} liveAllowed={liveAllowed} preview={preview} initialPart={initialPart} /> : null;
+}
+function PaymentForm({ invoice, minPayment, liveAllowed, preview, initialPart }: { invoice: Invoice; minPayment: string; liveAllowed: boolean; preview: boolean; initialPart: boolean }) {
   const router = useRouter();
-  const [chain, setChain] = useState("Base"), [part, setPart] = useState(initialPart), [amount, setAmount] = useState("");
-  const [refund, setRefund] = useState(""), [quote, setQuote] = useState<Quote>(), [progress, setProgress] = useState<Progress>();
-  const [error, setError] = useState(""), [busy, setBusy] = useState(false), [qr, setQr] = useState(""), [txHash, setTxHash] = useState("");
+  // Restore once, without replaying a quote request or cascading effect updates.
+  const [saved] = useState<{ quote: Quote; chain: string; refund: string; amount: string } | undefined>(() => {
+    try {
+      if (typeof window === "undefined") return;
+      const value = JSON.parse(sessionStorage.getItem(`payment:${network()}:${invoice.id}`) || "null");
+      if (value?.quote?.pid && value.quote.depositAddress && value.chain in ORIGIN_ASSETS) {
+        const n = BigInt(value.quote.amountOut);
+        return { ...value, amount: `${n / 1_000_000n}.${(n % 1_000_000n).toString().padStart(6, "0")}` };
+      }
+    } catch { /* Storage can be unavailable; signed quote download is still offered. */ }
+  });
+  const [chain, setChain] = useState(saved?.chain || "Base"), [part, setPart] = useState(saved ? true : initialPart), [amount, setAmount] = useState(saved?.amount || "");
+  const [refund, setRefund] = useState(saved?.refund || ""), [quote, setQuote] = useState<Quote | undefined>(saved?.quote), [progress, setProgress] = useState<Progress>();
+  const [error, setError] = useState(""), [busy, setBusy] = useState(false), [qrResult, setQr] = useState<{ address: string; svg: string }>(), [txHash, setTxHash] = useState("");
+  const qr = qrResult?.address === quote?.depositAddress ? qrResult?.svg : "";
   const [simulation, setSimulation] = useState<{ started: number; steps: { afterMs: number; status: OneClickStatus }[] }>(), [copied, setCopied] = useState(false);
-  // Retain the deposit instructions across reloads; never re-request a live quote automatically.
-  useEffect(() => {
-    let alive = true;
-    // Read external storage after hydration, with cancellation on invoice changes.
-    queueMicrotask(() => {
-      if (!alive) return;
-      try {
-        const saved = JSON.parse(sessionStorage.getItem(`payment:${network()}:${invoice.id}`) || "null");
-        if (saved?.quote?.pid && saved.quote.depositAddress && saved.chain in ORIGIN_ASSETS) {
-          setQuote(saved.quote); setChain(saved.chain); setRefund(saved.refund); setPart(true);
-          const n = BigInt(saved.quote.amountOut);
-          setAmount(`${n / 1_000_000n}.${(n % 1_000_000n).toString().padStart(6, "0")}`);
-        }
-      } catch { /* Storage can be unavailable; quote download is still offered. */ }
-    });
-    return () => { alive = false; };
-  }, [invoice.id]);
   const outstanding = BigInt(invoice.face) - (BigInt(invoice.paid.total) - BigInt(invoice.paid.overpaid));
   let units = "", validation = "";
   try { units = part ? parseAmount(amount) : outstanding.toString(); validateRepayAmount(BigInt(units), outstanding, BigInt(minPayment)); }
@@ -47,13 +47,13 @@ export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, ini
   const locked = !!quote?.pid || busy;
   const payable = ["Accepted", "Funded", "PartiallyPaid", "Defaulted"].includes(invoice.status) && outstanding > 0n;
   const validRefund = chain !== "NEAR" && validRefundAddress(chain as OriginChain, refund);
-  function clear() { setQuote(undefined); setProgress(undefined); setSimulation(undefined); setError(""); setQr(""); }
+  function clear() { setQuote(undefined); setProgress(undefined); setSimulation(undefined); setError(""); setQr(undefined); }
   async function run(action: () => Promise<void>) { setBusy(true); setError(""); try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Payment request failed"); } finally { setBusy(false); } }
   async function requestQuote(live = false) {
     await run(async () => {
       const originAsset = ORIGIN_ASSETS[chain as OriginChain].assetId ?? chain;
       const q = await json<Quote>(`/api/pay/${encodeURIComponent(invoice.id)}/quote`, { originAsset, amount: units, refundTo: refund, live });
-      setQuote(q); setQr(""); setProgress(undefined); setSimulation(undefined);
+      setQuote(q); setQr(undefined); setProgress(undefined); setSimulation(undefined);
       if (q.pid) {
         setProgress({ status: "PENDING_DEPOSIT", label: "Waiting for deposit", settlement: { confirmed: false } });
         try { sessionStorage.setItem(`payment:${network()}:${invoice.id}`, JSON.stringify({ quote: q, chain, refund })); } catch { /* Download remains available. */ }
@@ -62,7 +62,8 @@ export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, ini
   }
   useEffect(() => {
     let alive = true;
-    if (quote?.depositAddress) void QRCode.toString(quote.depositAddress, { type: "svg", width: 220 }).then(svg => { if (alive) setQr(svg); }).catch(() => { if (alive) setError("QR unavailable — copy the deposit address instead"); });
+    const address = quote?.depositAddress;
+    if (address) void QRCode.toString(address, { type: "svg", width: 220 }).then(svg => { if (alive) setQr({ address, svg }); }).catch(() => { if (alive) setError("QR unavailable — copy the deposit address instead"); });
     return () => { alive = false; };
   }, [quote?.depositAddress]);
   useEffect(() => {
