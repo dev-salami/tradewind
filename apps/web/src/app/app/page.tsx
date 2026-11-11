@@ -5,7 +5,9 @@ import { data, isFixtureMode, nowNs } from "@/lib/data";
 import { Avatar, Card, Kpi, Pill } from "@/components/surfaces";
 import { InvoiceTable } from "@/components/invoice-table";
 import { NotificationsDrawer } from "@/components/notifications-drawer";
+import { ExporterDashboard } from "@/components/exporter-dashboard";
 export default async function Dashboard() {
+  if (!isFixtureMode()) return <ExporterDashboard />;
   const source = data();
   // Account selection follows wallet wiring. Never claim the sample account is connected.
   const [invoices, config] = await Promise.all([isFixtureMode() ? source.invoicesByExporter(SAMPLE_EXPORTER) : source.listInvoices(), source.getConfig()]);

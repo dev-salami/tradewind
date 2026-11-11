@@ -16,9 +16,15 @@ const schema = z.object({
 });
 export function env() {
   // Empty .env.example entries behave like unset optional configuration.
-  const parsed = schema.safeParse(Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== "")));
+  const values = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== ""));
+  // One network/contract for both wallet and verification when only public vars are set.
+  values.NEAR_NETWORK ||= process.env.NEXT_PUBLIC_NEAR_NETWORK;
+  values.CORE_CONTRACT_ID ||= process.env.NEXT_PUBLIC_CORE_CONTRACT_ID;
+  values.USDC_CONTRACT_ID ||= process.env.NEXT_PUBLIC_USDC_CONTRACT_ID;
+  values.NEAR_RPC_URL ||= process.env.NEXT_PUBLIC_NEAR_RPC_URL;
+  const parsed = schema.safeParse(values);
   if (!parsed.success) throw new Error("Invalid server environment configuration");
   const e = parsed.data;
-  const rpc = process.env.NEAR_RPC_URL || (e.NEAR_NETWORK === "mainnet" ? "https://rpc.mainnet.near.org" : e.NEAR_NETWORK === "sandbox" ? "http://127.0.0.1:3030" : e.NEAR_RPC_URL);
+  const rpc = process.env.NEAR_RPC_URL || process.env.NEXT_PUBLIC_NEAR_RPC_URL || (e.NEAR_NETWORK === "mainnet" ? "https://rpc.mainnet.near.org" : e.NEAR_NETWORK === "sandbox" ? "http://127.0.0.1:3030" : e.NEAR_RPC_URL);
   return { ...e, NEAR_RPC_URL: rpc, AI_MODE: e.AI_MODE ?? (e.NEARAI_API_KEY ? "live" : "mock") };
 }

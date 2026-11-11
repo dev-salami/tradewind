@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, Plus, Landmark, Users, Receipt, Settings } from "lucide-react";
 import type { NearNetwork } from "@tradewind/core";
+import { WalletMenu } from "./wallet-provider";
 const NAV = [
   { href: "/app", label: "Dashboard", icon: LayoutGrid },
   { href: "/app/new", label: "New invoice", icon: Plus },
@@ -23,8 +24,7 @@ export function AppShell({ children, network }: { children: React.ReactNode; net
         return <Link key={href} href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon size={15} aria-hidden="true" />{label}</Link>;
       })}</nav>
       <div className="tw-tools"><span className="tw-network">{network}</span>
-        {/* TODO: real wallet selector and session wiring in the wallet brief. */}
-        <button className="tw-button tw-connect" disabled title="Wallet connection available in a later step">Connect wallet</button>
+        <WalletMenu />
       </div>
     </header>
     <main id="main" className="tw-main">{children}</main>
