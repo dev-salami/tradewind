@@ -8,13 +8,14 @@ import { fixtureProof } from "@/lib/fixture-proof";
 import { Card, Pill } from "./surfaces";
 import { StatusChip } from "./status-chip";
 import { WaterfallBars } from "./waterfall";
+import { isMockVerification } from "@/lib/verify-signature";
 export function ShortHash({ value }: { value: string }) { return <code className="tw-hash" title={value}>{value.length > 18 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value}</code>; }
 export function AiProof({ invoice, sample, verify = false }: { invoice: Invoice; sample: boolean; verify?: boolean }) {
   const original = invoice.verification;
   const v = original && sample ? { ...original, ...fixtureProof } : original;
   return <Card title="AI document check" action={<ShieldCheck size={20} />}>
     {!v ? <p className="tw-muted">No AI check recorded yet.</p> : <div className="tw-stack">
-      <div className="tw-ai-badge"><BadgeCheck size={21} aria-hidden="true" />{sample ? "Fixture — not a TEE result" : v.signing_algo === "mock" ? "MOCK — not a TEE result" : "Checked by NEAR AI · response signature recorded"}</div>
+      <div className="tw-ai-badge"><BadgeCheck size={21} aria-hidden="true" />{sample ? "Fixture — not a TEE result" : isMockVerification(v) ? "MOCK — not a TEE result" : "Checked by NEAR AI · response signature recorded"}</div>
       {sample && <p className="tw-sample-note">Sample attestation · illustrative only, not a valid TEE proof.</p>}
       <Pill value={`Verdict: ${v.verdict}`} tone={v.verdict === "pass" ? "green" : "coral"} />
       <dl className="tw-details"><div><dt>Model</dt><dd>{v.model_id}</dd></div><div><dt>Signature</dt><dd><ShortHash value={v.signature} /></dd></div>
