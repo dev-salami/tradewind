@@ -3,9 +3,11 @@ import { waterfallWidths, WATERFALL_LANES } from "@/lib/waterfall";
 export function WaterfallBars({ split }: { split: WaterfallSplit }) {
   const widths = waterfallWidths(split);
   const lanes = WATERFALL_LANES.filter(l => BigInt(split[l.key]) > 0n);
+  const bottom = WATERFALL_LANES.reduce((max, _, i) => widths[i] > 0 ? Math.max(max, 30 + widths.slice(0, i + 1).reduce((sum, w) => sum + w * 1.6, 0) + i * 30) : max, 0);
+  const height = Math.max(80, Math.ceil(bottom) + 16);
   const labels = ["LP pool principal", "LP yield", "Protocol fee", "Exporter remainder", "Overpaid · held for refund"];
   return <div className="tw-waterfall">
-    <svg className="tw-sankey" viewBox="0 0 640 330" role="img" aria-label={lanes.map(l => `${l.label} ${formatUsd(split[l.key], { decimals: 6 })}`).join(", ") || "No payment allocated"}>
+    <svg className="tw-sankey" viewBox={`0 0 640 ${height}`} data-height={height} role="img" aria-label={lanes.map(l => `${l.label} ${formatUsd(split[l.key], { decimals: 6 })}`).join(", ") || "No payment allocated"}>
       <text x="12" y="20" fill="currentColor" fontSize="13">Incoming payment · {formatUsd(WATERFALL_LANES.reduce((sum, lane) => sum + BigInt(split[lane.key]), 0n))}</text>
       {WATERFALL_LANES.map((lane, i) => {
         const thickness = widths[i] * 1.6, start = 30 + widths.slice(0, i).reduce((sum, width) => sum + width * 1.6, 0);

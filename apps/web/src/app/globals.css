@@ -4,7 +4,7 @@
 .tw-dropzone:hover, .tw-dropzone-active { border-color: var(--o); background: var(--o-3); }
 .tw-dropzone:disabled { opacity: .6; cursor: wait; }
 .tw-menu-button { display: none !important; }
-.tw-sankey { display: block; width: 100%; height: auto; overflow: visible; }
+.tw-sankey { display: block; width: 100%; max-width: 560px; height: auto; overflow: visible; }
 .tw-sankey-ribbon { transform-origin: left center; animation: tw-flow-in 700ms ease-out both; }
 @keyframes tw-flow-in { from { opacity: 0; transform: scaleX(.05); } to { transform: scaleX(1); } }
 .tw-nft-preview { display: block; width: min(100%, 480px); height: auto; border-radius: 20px; }

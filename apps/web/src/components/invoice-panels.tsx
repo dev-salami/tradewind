@@ -23,7 +23,7 @@ export function AiProof({ invoice, sample, verify = false }: { invoice: Invoice;
         <div><dt>Signer</dt><dd><ShortHash value={v.signing_address} /></dd></div><div><dt>Algorithm / chat</dt><dd>{v.signing_algo} · {v.chat_id}</dd></div>
       </dl>
       {verify && <VerifyButton id={invoice.id} fixture={sample} />}
-      <p className="tw-muted tw-small">AI checks consistency, not real-world authenticity. Full TDX quote verification and end-to-end document encryption are pending; amounts and buyer accounts are public on-chain.</p>
+      <p className="tw-muted tw-small">AI checks consistency, not real-world authenticity. Live runs verify the NEAR AI TEE attestation (TDX quote, signing key binding) server-side and send the document end-to-end encrypted; mock runs do neither. Amounts and buyer accounts are public on-chain.</p>
     </div>}
   </Card>;
 }
