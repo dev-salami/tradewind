@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { network } from "@/lib/env-public";
-import { emptyGuidedProgress, GUIDED_STORAGE_KEY, guidedAvailable, guidedStepEnabled, guidedUnits, resumeGuided, testnetTxLinks, type GuidedProgress, type GuidedResult, type GuidedStep } from "@/lib/guided-steps";
+import { emptyGuidedProgress, GUIDED_STORAGE_KEY, guidedAvailable, guidedStepEnabled, guidedUnits, resumeGuided, testnetTxLinks, guidedTxHashes, type GuidedProgress, type GuidedResult, type GuidedStep } from "@/lib/guided-steps";
 import { Card, Pill } from "./surfaces";
 
 function useGuidedAvailability(onChecked?: () => void) {
@@ -56,11 +56,11 @@ export function GuidedMode() {
     save({ ...progress, paused: true });
     try {
       const response = await fetch(`/api/guided/${step}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
-      const payload = await response.json() as { invoice_id?: string; tx_links?: unknown; verdict?: string; mock?: boolean; error?: string };
+      const payload = await response.json() as { invoice_id?: string; tx_links?: unknown; tx_hashes?: unknown; verdict?: string; mock?: boolean; error?: string };
       const id = typeof payload.invoice_id === "string" && /^TW-\d{4,20}$/.test(payload.invoice_id) ? payload.invoice_id : progress.invoice_id;
-      const result: GuidedResult = { step, invoice_id: id, tx_links: testnetTxLinks(payload.tx_links), verdict: payload.verdict, mock: payload.mock, error: response.ok ? undefined : payload.error || "Guided request failed" };
+      const result: GuidedResult = { step, invoice_id: id, tx_links: testnetTxLinks(payload.tx_links), tx_hashes: guidedTxHashes(payload.tx_hashes), verdict: payload.verdict, mock: payload.mock, error: response.ok ? undefined : payload.error || "Guided request failed" };
       const missingId = response.ok && !id;
-      const paused = missingId || (!response.ok && (result.tx_links.length > 0 || (step === "invoice" && !!id))) || (step === "invoice" && response.ok && payload.verdict !== "pass");
+      const paused = missingId || (!response.ok && (result.tx_links.length > 0 || !!result.tx_hashes?.length || (step === "invoice" && !!id))) || (step === "invoice" && response.ok && payload.verdict !== "pass");
       save({ invoice_id: id, next: response.ok && !missingId ? (step === "pay" && part ? 3 : progress.next + 1) : progress.next, paused, results: [...progress.results, result] });
       if (missingId) setError("Missing invoice ID; inspect the returned transactions before continuing.");
     } catch {
@@ -93,8 +93,9 @@ export function GuidedMode() {
       {result.error && <p role="alert">{result.error}</p>}
       {result.verdict && <p>AI verdict: {result.verdict}</p>}
       {result.mock === true && <p className="tw-muted">Mock AI check — not a TEE result</p>}
+      {network() === "sandbox" && !result.tx_links.length && result.tx_hashes?.map(hash => <p key={hash}><code className="tw-break">{hash}</code> <span className="tw-small tw-muted">local sandbox · no explorer</span></p>)}
       {result.tx_links.map(link => <p key={link}><a className="tw-text-link tw-break" href={link} target="_blank" rel="noreferrer">View on NearBlocks ↗</a> <span className="tw-small tw-muted">testnet</span></p>)}
     </Card>)}
-    <p className="tw-muted tw-small">Local progress is a guide, not chain state. Partial payments keep the payment step open. Sandbox transactions will not appear on NearBlocks testnet.</p>
+    <p className="tw-muted tw-small">Local progress is a guide, not chain state. Partial payments keep the payment step open. Local sandbox · no explorer.</p>
   </div>;
 }

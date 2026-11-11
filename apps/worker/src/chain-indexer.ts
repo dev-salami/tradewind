@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 export interface ChainIndexerOptions {
   rpcUrl: string; contractId: string; poolContractId?: string;
-  startHeight?: number; maxBlocks?: number; allowMainnetRead?: boolean;
+  startHeight?: number; maxBlocks?: number; maxSeeds?: number; allowMainnetRead?: boolean;
   knownTransactions?: { hash: string; sender: string }[];
 }
 export const chainReads = { block, chunk, txStatus, poolAtBlock };
@@ -101,8 +101,20 @@ export async function indexChain(db: DatabaseSync, options: ChainIndexerOptions,
     });
   }
   // Missing/pruned optional seeds must not stop the authoritative block scan.
-  for (const seed of seedTransactions(db, options.knownTransactions, options.contractId)) {
-    try { await ingest(seed.hash, seed.sender); } catch { seedFailures++; }
+  db.exec("CREATE TABLE IF NOT EXISTS chain_seed_failures (hash TEXT PRIMARY KEY, attempts INTEGER NOT NULL, retry_at INTEGER NOT NULL)");
+  // Unknown/garbage-collected seeds can block for the RPC timeout; back off per hash and cap work per tick.
+  const seedsDue = seedTransactions(db, options.knownTransactions, options.contractId).filter(seed => {
+    if (db.prepare("SELECT 1 FROM chain_transactions WHERE hash=?").get(seed.hash)) return false;
+    const failed = db.prepare("SELECT retry_at FROM chain_seed_failures WHERE hash=?").get(seed.hash);
+    return !failed || Number(failed.retry_at) <= Date.now();
+  }).slice(0, options.maxSeeds ?? 10);
+  for (const seed of seedsDue) {
+    try { await ingest(seed.hash, seed.sender); db.prepare("DELETE FROM chain_seed_failures WHERE hash=?").run(seed.hash); }
+    catch {
+      seedFailures++;
+      const attempts = Number(db.prepare("SELECT attempts FROM chain_seed_failures WHERE hash=?").get(seed.hash)?.attempts ?? 0) + 1;
+      db.prepare("INSERT OR REPLACE INTO chain_seed_failures VALUES (?, ?, ?)").run(seed.hash, attempts, Date.now() + Math.min(86_400_000, 60_000 * 2 ** attempts));
+    }
   }
   let skippedHeight = false;
   let previousHeight = start - 1;

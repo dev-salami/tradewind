@@ -3,7 +3,7 @@ import { fixtureData, SAMPLE_NOW, type Config, type Invoice, type Pool } from "@
 import { approvalDependencies } from "../../web/src/server/telegram/dependencies";
 import { view, signedCall } from "../../web/src/server/telegram/near";
 import { flushNotifications } from "../../web/src/server/telegram/notify";
-import { indexer, keeper, reminders, log, type JobDependencies } from "./jobs";
+import { guidedCleanup, indexer, keeper, reminders, log, type JobDependencies } from "./jobs";
 import { indexChain, indexerOptions } from "./chain-indexer";
 // DATABASE_PATH should be absolute: npm workspace scripts have different working directories.
 const s = openAutomationStore(process.env.DATABASE_PATH || "../web/data/tradewind.db");
@@ -22,14 +22,21 @@ async function tick() {
   const now = fixtures ? SAMPLE_NOW : (BigInt(Date.now()) * 1_000_000n).toString();
   let invoices: Invoice[] = [], config: Config | undefined;
   try { const result = await indexer(s, d, now); invoices = result.invoices; config = result.config; } catch { log("indexer", "failed"); }
-  if (!fixtures) try { log("chain_indexer", "complete", await indexChain(s.db, indexerOptions())); } catch { log("chain_indexer", "failed"); }
   // Keep jobs independent: a pool/indexer outage must not suppress keeper/reminder work.
   if (!config) try { config = await d.config(); invoices = (s.db.prepare("SELECT json_snapshot FROM invoices_cache").all()).map(r => JSON.parse(String(r.json_snapshot)) as Invoice); } catch { log("cache", "failed"); }
   if (config) {
-    try { await keeper(s, d, invoices, now, config); } catch { log("keeper", "failed"); }
+    let protectedIds: Set<string> | undefined;
+    try { protectedIds = await guidedCleanup(s, d, invoices); }
+    catch (error) { log("guidedCleanup", "failed", { error: error instanceof Error ? error.message.slice(0, 200) : "unknown" }); } // Fail closed for keeper, without suppressing independent notifications.
+    if (protectedIds) {
+      const excluded = protectedIds, safeInvoices = invoices.filter(i => !excluded.has(i.id));
+      try { await keeper(s, d, safeInvoices, now, config); } catch { log("keeper", "failed"); }
+    }
     try { reminders(s, d, invoices, now, config); } catch { log("reminders", "failed"); }
   }
   try { await flushNotifications(s); } catch { log("notifier", "failed"); }
+  // Chain backfill runs last so slow RPC scans never delay keeper, cleanup or notifications.
+  if (!fixtures) try { log("chain_indexer", "complete", await indexChain(s.db, indexerOptions())); } catch (error) { log("chain_indexer", "failed", { error: error instanceof Error ? error.message.slice(0, 200) : "unknown" }); }
 }
 async function main() {
   while (!stopping) { await tick(); if (!stopping) await new Promise(resolve => setTimeout(resolve, interval)); }

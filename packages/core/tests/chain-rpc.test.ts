@@ -8,7 +8,7 @@ it("uses only read methods with exact block/chunk/transaction parameters", async
   await chunk("http://localhost:3030", "chunk-hash"); await txStatus("http://localhost:3030", "tx-hash", "sender.testnet");
   expect(fetcher.mock.calls.map(([, init]) => { const body = JSON.parse(init.body); return [body.method, body.params]; })).toEqual([
     ["block", { finality: "final" }], ["block", { block_id: 42 }], ["chunk", { chunk_id: "chunk-hash" }],
-    ["EXPERIMENTAL_tx_status", { tx_hash: "tx-hash", sender_account_id: "sender.testnet", wait_until: "FINAL" }],
+    ["EXPERIMENTAL_tx_status", { tx_hash: "tx-hash", sender_account_id: "sender.testnet", wait_until: "NONE" }],
   ]);
 });
 it("backs off on 429 and respects the endpoint cooldown", async () => {

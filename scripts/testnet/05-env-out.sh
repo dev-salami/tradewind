@@ -27,6 +27,7 @@ LP_ACCOUNT_ID=$LP
 # Secret variable NAMES only: configure separately in a secret manager.
 # ATTESTER_PRIVATE_KEY
 # KEEPER_PRIVATE_KEY
+# OWNER_PRIVATE_KEY (worker cancellation of Accepted guided invoices only)
 # BOT_PRIVATE_KEY
 # NEARAI_API_KEY
 # TELEGRAM_BOT_TOKEN
