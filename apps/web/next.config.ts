@@ -1,3 +1,4 @@
 import type { NextConfig } from "next";
-const config: NextConfig = { output: "standalone", transpilePackages: ["@tradewind/core"] };
+// pdfjs-dist loads its worker module at runtime; bundling it breaks server-side PDF parsing.
+const config: NextConfig = { output: "standalone", transpilePackages: ["@tradewind/core"], serverExternalPackages: ["pdfjs-dist"] };
 export default config;

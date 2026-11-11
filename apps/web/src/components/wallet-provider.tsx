@@ -21,6 +21,7 @@ interface WalletContextValue {
   /** NEP-413 sign-in: creates a server session cookie for the connected account. */
   signInSession(): Promise<void>;
 }
+const SANDBOX_WALLET_MESSAGE = "Browser wallets are not available on a local sandbox. Use Play both sides, or switch to testnet.";
 const WalletContext = createContext<WalletContextValue | null>(null);
 export function useWallet() { const value = useContext(WalletContext); if (!value) throw new Error("WalletProvider missing"); return value; }
 export function WalletProvider({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState(""), [receipts, setReceipts] = useState<{ hash: string; failed: boolean; warning: string }[]>([]);
   const processed = useRef(new Set<string>());
   const initialize = useCallback(() => {
+    // Hosted wallets (MyNearWallet, Meteor, HOT) have no local-sandbox config; use guided mode there.
+    if (network() === "sandbox") return Promise.reject(new Error(SANDBOX_WALLET_MESSAGE));
     if (!selector.current) selector.current = setupWalletSelector({
       network: network() === "sandbox" ? { networkId: "sandbox", nodeUrl: rpcUrl(), helperUrl: "http://127.0.0.1:3000", explorerUrl: "http://127.0.0.1:9001", indexerUrl: "http://127.0.0.1:3000" } : network() as "testnet" | "mainnet",
       modules: [setupMyNearWallet(), setupMeteorWallet(), setupHotWallet()],
@@ -73,7 +76,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
         });
       }
-    }).catch(e => { if (alive) setError(e instanceof Error ? e.message : "Wallet initialization failed"); });
+    }).catch(e => { if (alive && network() !== "sandbox") setError(e instanceof Error ? e.message : "Wallet initialization failed"); });
     return () => { alive = false; unsubscribe?.(); };
   }, [initialize, complete]);
   async function connect() {

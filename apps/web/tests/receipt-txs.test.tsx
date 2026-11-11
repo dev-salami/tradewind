@@ -36,6 +36,15 @@ describe("public transaction links", () => {
     vi.stubEnv("NEXT_PUBLIC_NEAR_NETWORK", "mainnet");
     expect(renderToStaticMarkup(await Timeline({ invoice, txs: [tx("A", "accept")] }))).toContain(`https://nearblocks.io/txns/${"A".repeat(44)}`);
   });
+  it("shows keeper overdue/default steps with their tx links once they happen", async () => {
+    const defaulted = { ...invoice, status: "Defaulted" as const, overdue: true };
+    const keeper = (letter: string, method: string): ReceiptTx => ({ tx_hash: letter.repeat(44), method, kind: "other" });
+    const html = renderToStaticMarkup(await Timeline({ invoice: defaulted, txs: [keeper("C", "mark_overdue"), keeper("D", "mark_default")] }));
+    expect(html).toContain("Overdue"); expect(html).toContain("Defaulted"); expect(html).not.toContain(">Repaid<");
+    expect(html).toContain(`https://testnet.nearblocks.io/txns/${"C".repeat(44)}`);
+    expect(html).toContain(`https://testnet.nearblocks.io/txns/${"D".repeat(44)}`);
+    expect(renderToStaticMarkup(await Timeline({ invoice }))).not.toContain("Defaulted");
+  });
   it("matches repayment parts by order without losing the progress bar or splits", async () => {
     const txs = [tx("A", "repay"), tx("B", "repay")];
     const html = renderToStaticMarkup(<PaymentList invoice={invoice} txs={txs} />);
