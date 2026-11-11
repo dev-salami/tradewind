@@ -23,7 +23,7 @@ Prerequisites: Node 22+, Rust stable with `wasm32-unknown-unknown`, [`cargo-near
 | Do | See |
 | --- | --- |
 | `make test` | Contract unit tests (core + mock USDC) and `near-workspaces` sandbox integration tests all pass. No network or credentials needed (the first run downloads the sandbox binary). |
-| `npm run demo:local` | The full loop on a local NEAR sandbox, printed step by step: seed pool → create invoice → MOCK attestation → buyer accepts (NFT minted) → advance at 80% → buyer repays → waterfall split → buyer score and next rate go up → share price `1.0075`. |
+| `npm run demo:local` | The full loop on a local NEAR sandbox, printed step by step: seed pool → create invoice → MOCK attestation → buyer accepts (NFT minted) → advance at 82% (seeded score 12) → two partial repayments → waterfall split → score 15, next rate 85% → share price `1.0075` → LP redeems 20.15 USDC. |
 | `npm install && npm test` | TypeScript tests for `@tradewind/core` (fee math, waterfall, rpc client, NEP-413, 1Click helpers), `@tradewind/web` (API routes, AI verification, auth, Telegram, guided mode) and `@tradewind/worker`. |
 | `npm run build && npm run dev`, then open `http://localhost:3000` | The web app on clearly labelled **sample data** (read-only): landing page, exporter dashboard `/app`, invoice detail `/app/i/TW-0042`, buyer review `/b/TW-0042`, pay page `/pay/TW-0042`, public receipt `/r/TW-0042`, pool `/pool`, buyer record `/buyer/gulf-foods-sample.testnet`. |
 | Click **Verify** on a receipt's AI document check | The proof panel. Sample proofs are labelled "Fixture — not a TEE result". Live proofs are checked in the browser (EIP-191 signer vs. the attested model key). |
