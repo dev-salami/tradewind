@@ -18,7 +18,7 @@ Network rule for this build: **testnet / local sandbox only**. Mainnet items sta
 - [x] **F12** Repayment waterfall (pool principal → pool fee → protocol → exporter, claimable fallback, events, exact to 1e-6) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
 - [ ] **F14** Public receipts `/r/:id` (timeline with tx links, AI proof + Verify, waterfall bars) — _read-only screen from fixtures (#2); tx links + Verify pending_
 - [ ] **F15a** LP dashboard basic (pool totals, share price from contract view, funded invoices, position) — _read-only screen from fixtures (#2); RPC wiring pending_
-- [ ] **F16** Demo clock, honest labels, testnet sandbox (+ guided "play both sides" on testnet only) — _banner/labels in #2; guided mode pending_
+- [ ] **F16** Demo clock, honest labels, testnet sandbox (+ guided "play both sides" on testnet only) — _banner/labels in #2; guided backend (testnet-only signer routes) in #10; guided UI toggle pending_
 - [ ] **F17** Judge-ready repo (README "do X → see Y", MIT LICENSE, `make test`, `npm run demo:local`, libraries + reuse disclosure, no secrets) — _LICENSE, make test, demo:local merged (#3); judge README pending_
 - [x] **F18** Admin/ops console (owner-only page + CLI: pause, allowlist, config, attribute/refund, unfreeze, run keeper) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 
