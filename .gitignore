@@ -1,0 +1,14 @@
+node_modules/
+target/
+.next/
+dist/
+out/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage/
+*.wasm
+!res/*.wasm
+.turbo/
