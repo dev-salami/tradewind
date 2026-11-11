@@ -8,7 +8,7 @@ import { parseAmount } from "@/lib/tx";
 import { ChainRing } from "./chain-ring";
 import { DirectPayment } from "./invoice-flows";
 
-interface Quote { pid?: string; dry: boolean; preview: boolean; amountIn: string; amountInFormatted: string; minAmountIn: string; amountOut: string; depositAddress?: string; depositMemo?: string; deadline: string; timeEstimate: number; path: "A" | "B"; refundFee?: string; withdrawFee?: string; quoteResponse?: QuoteResponse }
+interface Quote { pid?: string; dry: boolean; simulated?: boolean; preview: boolean; amountIn: string; amountInFormatted: string; minAmountIn: string; amountOut: string; depositAddress?: string; depositMemo?: string; deadline: string; timeEstimate: number; path: "A" | "B"; refundFee?: string; withdrawFee?: string; quoteResponse?: QuoteResponse }
 interface Progress { status: OneClickStatus; label: string; settlement: { confirmed: boolean }; swapDetails?: { originChainTxHashes: { hash: string }[]; nearTxHashes: string[] } }
 async function json<T>(url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method: body === undefined ? "GET" : "POST", cache: "no-store", ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) });
@@ -25,14 +25,20 @@ export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, ini
   const [simulation, setSimulation] = useState<{ started: number; steps: { afterMs: number; status: OneClickStatus }[] }>(), [copied, setCopied] = useState(false);
   // Retain the deposit instructions across reloads; never re-request a live quote automatically.
   useEffect(() => {
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(`payment:${network()}:${invoice.id}`) || "null");
-      if (saved?.quote?.pid && saved.quote.depositAddress && saved.chain in ORIGIN_ASSETS) {
-        setQuote(saved.quote); setChain(saved.chain); setRefund(saved.refund); setPart(true);
-        const n = BigInt(saved.quote.amountOut);
-        setAmount(`${n / 1_000_000n}.${(n % 1_000_000n).toString().padStart(6, "0")}`);
-      }
-    } catch { /* Storage can be unavailable; signed quote download is still offered. */ }
+    let alive = true;
+    // Read external storage after hydration, with cancellation on invoice changes.
+    queueMicrotask(() => {
+      if (!alive) return;
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(`payment:${network()}:${invoice.id}`) || "null");
+        if (saved?.quote?.pid && saved.quote.depositAddress && saved.chain in ORIGIN_ASSETS) {
+          setQuote(saved.quote); setChain(saved.chain); setRefund(saved.refund); setPart(true);
+          const n = BigInt(saved.quote.amountOut);
+          setAmount(`${n / 1_000_000n}.${(n % 1_000_000n).toString().padStart(6, "0")}`);
+        }
+      } catch { /* Storage can be unavailable; quote download is still offered. */ }
+    });
+    return () => { alive = false; };
   }, [invoice.id]);
   const outstanding = BigInt(invoice.face) - (BigInt(invoice.paid.total) - BigInt(invoice.paid.overpaid));
   let units = "", validation = "";
@@ -47,7 +53,7 @@ export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, ini
     await run(async () => {
       const originAsset = ORIGIN_ASSETS[chain as OriginChain].assetId ?? chain;
       const q = await json<Quote>(`/api/pay/${encodeURIComponent(invoice.id)}/quote`, { originAsset, amount: units, refundTo: refund, live });
-      setQuote(q); setProgress(undefined); setSimulation(undefined);
+      setQuote(q); setQr(""); setProgress(undefined); setSimulation(undefined);
       if (q.pid) {
         setProgress({ status: "PENDING_DEPOSIT", label: "Waiting for deposit", settlement: { confirmed: false } });
         try { sessionStorage.setItem(`payment:${network()}:${invoice.id}`, JSON.stringify({ quote: q, chain, refund })); } catch { /* Download remains available. */ }
@@ -56,7 +62,6 @@ export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, ini
   }
   useEffect(() => {
     let alive = true;
-    setQr("");
     if (quote?.depositAddress) void QRCode.toString(quote.depositAddress, { type: "svg", width: 220 }).then(svg => { if (alive) setQr(svg); }).catch(() => { if (alive) setError("QR unavailable — copy the deposit address instead"); });
     return () => { alive = false; };
   }, [quote?.depositAddress]);
@@ -92,8 +97,9 @@ export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, ini
   const stage = progress?.status === "SUCCESS" && (simulation || progress.settlement.confirmed) ? 2 : progress?.status === "PROCESSING" || progress?.status === "SUCCESS" ? 1 : 0;
   const hashes = progress?.swapDetails?.originChainTxHashes.map(t => t.hash) ?? (txHash ? [txHash] : []);
   return <div className="tw-stack tw-form">
-    <p className="tw-eyebrow">{!preview && quote && !quote.dry ? "Real cross-chain payment" : "Preview"}</p>
-    {preview && <p className="tw-sample-note">1Click is mainnet-only — preview quote, no deposit address on testnet</p>}
+    <p className="tw-eyebrow">{quote?.simulated ? "Simulated 1Click (local) · Trusted settlement relayer" : !preview && quote && !quote.dry ? "Real cross-chain payment" : "Preview"}</p>
+    {preview && !quote?.simulated && <p className="tw-sample-note">1Click is mainnet-only — preview quote, no deposit address on testnet</p>}
+    {quote?.simulated && <p role="note">Local simulation only. No real cross-chain funds moved. Never send funds to the fake deposit address.</p>}
     <fieldset className="tw-payment-amount" disabled={locked}><legend>Payment amount</legend><div className="tw-actions"><button className="tw-ghost" aria-pressed={!part} onClick={() => { clear(); setPart(false); }}>Pay full {formatUsd(outstanding)}</button><button className="tw-ghost" aria-pressed={part} onClick={() => { clear(); setPart(true); }}>Pay part</button></div>{part && <label>USDC amount<input inputMode="decimal" value={amount} onChange={e => { clear(); setAmount(e.target.value); }} /></label>}<p className="tw-small tw-muted">Minimum part {formatUsd(minPayment)}; a smaller final balance can be paid exactly.</p></fieldset>
     {validation && <p role="alert">{validation}</p>}
     {!payable && <p role="alert">This invoice has no payable outstanding balance or is not ready for payment.</p>}
@@ -102,11 +108,11 @@ export function AnyChainPayment({ invoice, minPayment, liveAllowed, preview, ini
       <label>Refund address on {chain}<input disabled={locked} value={refund} placeholder={chain === "Solana" ? "Solana base58 address" : "0x…"} onChange={e => { clear(); setRefund(e.target.value.trim()); }} /></label>
       {refund && !validRefund && <p role="alert">Enter a valid {chain} refund address.</p>}
       {!quote?.pid && <button className="tw-button" disabled={busy || !payable || !!validation || !validRefund} onClick={() => void requestQuote()}>Preview quote</button>}
-      {quote && <div className="tw-quote tw-stack"><p>You send <strong>{quote.amountInFormatted} USDC on {chain}</strong> → invoice receives <strong>{formatUsd(quote.amountOut, { decimals: 6 }).slice(1)} USDC on NEAR</strong></p><p className="tw-muted">Estimated {quote.timeEstimate} seconds after confirmation. Input includes swap costs and a 1% slippage buffer; unused input is refunded. Origin gas is extra.</p><p className="tw-small tw-break">Minimum input: {quote.minAmountIn} base units · Deadline: {new Date(quote.deadline).toLocaleString()}</p>{quote.path === "B" && <p role="note">Trusted settlement relayer (MVP) · forwarding worker not implemented; delivery is not invoice settlement.</p>}</div>}
+      {quote && <div className="tw-quote tw-stack"><p>{quote.simulated ? "Simulated input" : "You send"} <strong>{quote.amountInFormatted} USDC on {chain}</strong> → {quote.simulated ? "simulated invoice amount" : "invoice receives"} <strong>{formatUsd(quote.amountOut, { decimals: 6 }).slice(1)} USDC on NEAR</strong></p><p className="tw-muted">Estimated {quote.timeEstimate} seconds after confirmation. Input includes swap costs and a 1% slippage buffer; unused input is refunded. Origin gas is extra.</p><p className="tw-small tw-break">Minimum input: {quote.minAmountIn} base units · Deadline: {new Date(quote.deadline).toLocaleString()}</p>{quote.path === "B" && <p role="note">Trusted settlement relayer forwards to the invoice contract after delivery; settlement is confirmed only when the payment appears on chain. It holds funds in transit.</p>}</div>}
       {liveAllowed && !quote?.pid && <button className="tw-button" disabled={busy || !payable || !!validation || !validRefund} onClick={() => void requestQuote(true)}>Get deposit address</button>}
       {quote?.withdrawFee !== undefined && <p className="tw-small tw-muted">Destination withdrawal fee (already included in the quote): {formatUsd(quote.withdrawFee, { decimals: 6 })} USDC.</p>}
       {quote?.refundFee !== undefined && <p className="tw-small tw-muted">Quoted refund fee if applicable: {quote.refundFee} origin USDC base units.</p>}
-      {quote?.depositAddress && <div className="tw-stack"><p>Send exactly {quote.amountInFormatted} USDC on {chain} from your own wallet, before the deadline. Never send testnet tokens.</p><code className="tw-break">{quote.depositAddress}</code>{qr && <img width="220" height="220" src={`data:image/svg+xml,${encodeURIComponent(qr)}`} alt="Deposit address QR" />}{quote.depositMemo && <p role="alert">Required deposit memo: <code>{quote.depositMemo}</code>. The QR contains the address only; include this memo separately.</p>}<button className="tw-ghost" onClick={() => void run(async () => { await navigator.clipboard.writeText(quote.depositAddress!); setCopied(true); })}>{copied ? "Copied" : "Copy address"}</button>{quote.quoteResponse && <a className="tw-text-link" download={`quote-${quote.pid}.json`} href={`data:application/json,${encodeURIComponent(JSON.stringify(quote.quoteResponse, null, 2))}`}>Save signed quote for your records</a>}<label>I&apos;ve sent it — tx hash (optional)<input value={txHash} onChange={e => setTxHash(e.target.value.trim())} /></label><button className="tw-ghost" disabled={busy || !/^[A-Za-z0-9]{32,128}$/.test(txHash)} onClick={() => void run(async () => { await json(`/api/pay/intents/${quote.pid}/deposit-tx`, { txHash }); })}>Submit transaction hash</button></div>}
+      {quote?.depositAddress && <div className="tw-stack"><p>{quote.simulated ? "Fake deposit address — do not send any funds. Local tUSDC delivery is supplied by the sandbox script." : `Send exactly ${quote.amountInFormatted} USDC on ${chain} from your own wallet, before the deadline. Never send testnet tokens.`}</p><code className="tw-break">{quote.depositAddress}</code>{qr && !quote.simulated && <img width="220" height="220" src={`data:image/svg+xml,${encodeURIComponent(qr)}`} alt="Deposit address QR" />}{quote.depositMemo && <p role="alert">Required deposit memo: <code>{quote.depositMemo}</code>. The QR contains the address only; include this memo separately.</p>}<button className="tw-ghost" onClick={() => void run(async () => { await navigator.clipboard.writeText(quote.depositAddress!); setCopied(true); })}>{copied ? "Copied" : "Copy address"}</button>{quote.quoteResponse && <a className="tw-text-link" download={`quote-${quote.pid}.json`} href={`data:application/json,${encodeURIComponent(JSON.stringify(quote.quoteResponse, null, 2))}`}>Save quote for your records</a>}<label>Deposit tx hash (optional)<input value={txHash} onChange={e => setTxHash(e.target.value.trim())} /></label><button className="tw-ghost" disabled={busy || !/^[A-Za-z0-9]{32,128}$/.test(txHash)} onClick={() => void run(async () => { await json(`/api/pay/intents/${quote.pid}/deposit-tx`, { txHash }); })}>Submit transaction hash</button></div>}
       {preview && !simulation && <button className="tw-ghost" disabled={busy} onClick={() => void run(async () => { const s = await json<{ steps: { afterMs: number; status: OneClickStatus }[] }>(`/api/pay/${encodeURIComponent(invoice.id)}/simulate`, {}); setSimulation({ started: Date.now(), steps: s.steps }); })}>Simulate status steps (no funds)</button>}
       {simulation && <p className="tw-sample-note">Simulation only — no funds moved, no invoice settlement. Actual testnet repayment: choose NEAR and “Pay on NEAR (testnet USDC)”.</p>}
       {progress && <div aria-live="polite"><ol className="tw-timeline">{["Waiting for deposit", "Processing", "Delivered"].map((s, i) => <li key={s} className={stage >= i ? "tw-complete" : ""}><span className="tw-timeline-dot" /><span>{simulation ? "Simulated: " : ""}{s}{i === 2 && !simulation && !progress.settlement.confirmed ? " (invoice confirmation pending)" : ""}</span></li>)}</ol><p role="status">{progress.label}</p>{progress.settlement.confirmed && <p className="tw-green">Payment recorded by the invoice contract.</p>}{hashes.map(hash => <p key={hash}><a target="_blank" rel="noreferrer" href={`${originExplorer[chain as OriginChain]}${encodeURIComponent(hash)}`}>Origin transaction ↗</a></p>)}{progress.swapDetails?.nearTxHashes.map(hash => <p key={hash}><a target="_blank" rel="noreferrer" href={explorerTx(network(), hash) ?? undefined}>NEAR delivery transaction ↗</a></p>)}</div>}
