@@ -28,11 +28,18 @@ beforeEach(async () => {
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Network forbidden"); }));
 });
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
-it.each(["Created", "Verified", "Accepted"] as const)("cancels %s with the authorized signer and one yocto", async status => {
+it.each(["Created", "Verified", "Accepted"] as const)("cancels %s as exporter without requiring owner credentials", async status => {
   invoice = { ...invoice, status, advance: null };
+  vi.stubEnv("OWNER_PRIVATE_KEY", "");
   expect(await guidedCleanupCall("cancel", invoice, session)).toBe("cleanup-hash");
-  expect(mocks.call).toHaveBeenCalledWith(status === "Accepted" ? "owner.test.near" : invoice.exporter, expect.objectContaining({ methodName: "cancel_invoice", args: { id: invoice.id }, attachedDeposit: 1n }));
-  expect(mocks.key).toHaveBeenCalledWith("sandbox", status === "Accepted" ? "owner.test.near" : invoice.exporter, status === "Accepted" ? "owner-key" : "exporter-key");
+  expect(mocks.call).toHaveBeenCalledWith(invoice.exporter, expect.objectContaining({ methodName: "cancel_invoice", args: { id: invoice.id }, attachedDeposit: 0n }));
+  expect(mocks.key).toHaveBeenCalledWith("sandbox", invoice.exporter, "exporter-key");
+});
+it("supports explicit one-yocto and owner-only compatibility rejections", async () => {
+  invoice = { ...invoice, status: "Accepted", advance: null };
+  mocks.call.mockRejectedValueOnce(new Error("owner only")).mockRejectedValueOnce(new Error("Requires attached deposit of exactly 1 yoctoNEAR"));
+  expect(await guidedCleanupCall("cancel", invoice, session)).toBe("cleanup-hash");
+  expect(mocks.call).toHaveBeenLastCalledWith("owner.test.near", expect.objectContaining({ attachedDeposit: 1n }));
 });
 it("mints only the shortfall, repays fully as the session buyer and confirms Repaid", async () => {
   invoice = { ...invoice, status: "PartiallyPaid", paid: { ...invoice.paid, total: "6000000", overpaid: "0" } };
@@ -43,11 +50,9 @@ it("mints only the shortfall, repays fully as the session buyer and confirms Rep
   expect(mocks.call).toHaveBeenCalledWith(invoice.buyer, expect.objectContaining({ methodName: "mint", args: { account_id: invoice.buyer, amount: "3000000" } }));
   expect(mocks.call).toHaveBeenLastCalledWith(invoice.buyer, expect.objectContaining({ methodName: "ft_transfer_call", args: expect.objectContaining({ amount: "4000000" }), attachedDeposit: 1n, gas: 300_000_000_000_000n }));
 });
-it("refuses mainnet and missing owner credentials without signing", async () => {
+it("refuses mainnet without signing", async () => {
   vi.stubEnv("NEAR_NETWORK", "mainnet");
   await expect(guidedCleanupCall("repay", invoice, session)).rejects.toThrow("disabled");
-  vi.stubEnv("NEAR_NETWORK", "sandbox"); vi.stubEnv("OWNER_PRIVATE_KEY", "");
-  await expect(guidedCleanupCall("cancel", { ...invoice, status: "Accepted", advance: null }, session)).rejects.toThrow("not configured");
   expect(mocks.call).not.toHaveBeenCalled();
 });
 it("preserves missing-method failures for the cleanup job's guarded fallback", async () => {

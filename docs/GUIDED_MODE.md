@@ -107,13 +107,16 @@ verification, and erases the in-memory buffer even on failure. No PDF is stored.
 ## Abandoned demo cleanup
 
 Run the worker against the **same absolute `DATABASE_PATH`**, `SESSION_SECRET`,
-guided exporter key, owner `OWNER_ACCOUNT_ID` / `OWNER_PRIVATE_KEY`, network,
-core and mock USDC configuration. Keep the owner key worker-only. Before keeper
+guided exporter key, network, core and mock USDC configuration. Optional
+`OWNER_ACCOUNT_ID` / `OWNER_PRIVATE_KEY` support contract versions restricting
+Accepted cancellation to the owner; keep that key worker-only. Before keeper
 work, `guidedCleanup` finds invoices belonging to stored session buyers and the
 guided exporter. At `GUIDED_STALE_MINUTES` (default **10 wall-clock minutes**):
 
-- Created/Verified with no advance: cancel as exporter; Accepted with no advance:
-  cancel as owner. Both use `cancel_invoice` with **1 yoctoNEAR**. Older contracts
+- Created/Verified/Accepted without an advance cancel as exporter using
+  `cancel_invoice` with no deposit. Explicit one-yocto rejections retry with one
+  yocto; explicit owner-only rejections on Accepted may retry with the optional
+  owner key. Ambiguous failures are not retried. Older contracts
   missing that method log `cancel_unavailable`
   and skip; other failures log `failed` without leaking RPC details.
 - Funded/PartiallyPaid (or an already Defaulted legacy session) with an advance
@@ -124,7 +127,9 @@ guided exporter. At `GUIDED_STALE_MINUTES` (default **10 wall-clock minutes**):
   the accelerated demo clock reaches default before ten wall-clock minutes.
   Disabling guided signing also retains this keeper exclusion.
 
-This requires the incoming `cancel_invoice` method; no buyer-limit override is
+Cancelling Accepted invoices requires the incoming contract support; the current
+legacy method only cancels pre-acceptance invoices. Unsupported statuses log
+`failed` and remain excluded from keeper defaulting. No buyer-limit override is
 needed because each browser has independent exposure/freeze state. Monitor
 cleanup failures and session NEAR balances. The worker and web still use separate
 processes: do not run overlapping cleanup workers; simultaneous UI repayment can
@@ -177,6 +182,6 @@ suite and typecheck in a Node-capable review environment. `guided-sessions.test.
 encryption, isolated provisioning, reuse, counters and session caps;
 `showcase.test.ts` covers env/discovery/null resolution, and worker
 `guided-cleanup.test.ts` covers fixture-based cleanup decisions and guarded
-cancellation. `guided-near.test.ts` checks owner/exporter cancellation signers,
-the one-yocto deposit, shortfall minting and full repayment confirmation.
+cancellation. `guided-near.test.ts` checks exporter cancellation, guarded
+owner/deposit compatibility fallbacks, shortfall minting and full repayment confirmation.
 All network behavior in these tests is mocked.
