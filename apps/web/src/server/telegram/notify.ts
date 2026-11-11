@@ -4,7 +4,10 @@ import type { TelegramCard } from "@tradewind/core";
 import { telegramApiRoot } from "./config";
 export function keyboard(card: TelegramCard) {
   const result = new InlineKeyboard();
-  for (const b of card.buttons) { if (b.url) result.url(b.text, b.url); else if (b.callback_data) result.text(b.text, b.callback_data); result.row(); }
+  card.buttons.forEach((b, index) => {
+    if (index > 0) result.row();
+    if (b.url) result.url(b.text, b.url); else if (b.callback_data) result.text(b.text, b.callback_data);
+  });
   return result;
 }
 export async function flushNotifications(s: AutomationStore) {
