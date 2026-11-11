@@ -124,7 +124,7 @@ export async function guidedCleanup(s: AutomationStore, d: JobDependencies, invo
       log("guidedCleanup", action, { invoice_id: invoice.id, tx_hash: hash });
     } catch (error) {
       const missing = action === "cancel" && /MethodNotFound|method.*(not found|does not exist)|cannot find.*method/i.test(String(error));
-      log("guidedCleanup", missing ? "cancel_unavailable" : "failed", { invoice_id: invoice.id });
+      log("guidedCleanup", missing ? "cancel_unavailable" : "failed", { invoice_id: invoice.id, error: String(error).slice(0, 300) });
     }
   }
   return protectedIds;

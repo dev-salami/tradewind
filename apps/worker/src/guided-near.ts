@@ -38,7 +38,7 @@ export async function guidedCleanupCall(action: "cancel" | "repay", invoice: Inv
       // Optional compatibility with versions restricting Accepted cancellation
       // to the owner. Exporter remains the default; owner keys are not required.
       const owner = process.env.OWNER_ACCOUNT_ID, ownerKey = process.env.OWNER_PRIVATE_KEY;
-      if (current.status !== "Accepted" || !/owner only|owner.*(required|cancel)|unauthorized/i.test(String(error)) || !owner || !ownerKey) throw error;
+      if (current.status !== "Accepted" || !/already accepted|owner only|owner.*(required|cancel)|unauthorized/i.test(String(error)) || !owner || !ownerKey) throw error;
       await keyStore.setKey(networkId, owner, KeyPair.fromString(ownerKey as `ed25519:${string}`));
       account = new Account(near.connection, owner);
       return cancel();
