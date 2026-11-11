@@ -12,6 +12,49 @@ The npm workspace contains `@tradewind/core` (pure TypeScript) and `@tradewind/w
 
 See [`docs/WEB_FOUNDATION.md`](docs/WEB_FOUNDATION.md) for routes, datasource setup, reference UI reuse, reviewer notes, and contract integration assumptions.
 
+## Local sandbox
+
+Prerequisites: Rust (stable + `wasm32-unknown-unknown`), `cargo-near`, and `make`.
+Linux also needs OpenSSL headers (`libssl-dev`) and normally `pkg-config`.
+Without `pkg-config`, export `OPENSSL_LIB_DIR` and `OPENSSL_INCLUDE_DIR` to
+the system OpenSSL library/header directories.
+
+```sh
+make build       # Both contracts; no deploy or public RPC calls
+make unit        # Library unit tests only
+make test        # Build wasm, then workspace unit + sandbox integration tests
+make demo        # Build wasm and run the local Rust example
+scripts/demo-local  # Same demo, from any working directory
+npm run demo:local  # Optional npm convenience command; no npm install needed
+make fmt
+make clippy
+```
+
+The example and tests use only a local `near-workspaces` sandbox, with generated
+local accounts and no credentials. The first run may download the sandbox
+binary; pre-cache it if running offline. They never call a hosted AI service:
+the local attester verdict is explicitly **MOCK**, not a TEE attestation.
+The hosted application uses NEAR AI Cloud TEE.
+
+Wasm is read from `target/near/<crate>.wasm` or
+`target/near/<crate>/<crate>.wasm` (also checked under each contract's own
+`target` directory and `CARGO_TARGET_DIR`). Missing artifacts produce a
+`make build` instruction. Crate artifact names are `tradewind` and `mock_usdc`.
+Run `make build` after contract edits; tests deliberately do not compile wasm.
+
+The demo clock is **one contract day per second**. Tests use `fast_forward`,
+not sleeps: overdue/default jumps use twice the deadline in days plus 10
+blocks, then check `now_contract_day` actually crossed the deadline. Sandbox
+blocks are assumed to advance timestamps approximately one second. The
+three-day default invoice requests its advance immediately after acceptance.
+Happy-path scoring uses four real on-time seed repayments (score 12, rate 82%),
+then a $10/60-day invoice reaches score 15 and next rate 85%. The pool's
+virtual +1 accounting yields exact share price `1.007499`, displayed rounded
+as `1.0075` in the demo.
+
+See [`contracts/mock-usdc/README.md`](contracts/mock-usdc/README.md):
+testnet faucet token, never deploy to mainnet.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
