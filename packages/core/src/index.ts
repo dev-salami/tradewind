@@ -9,3 +9,4 @@ export * from "./datasource";
 export * from "./time";
 export * from "./telegram-cards";
 export * from "./worker-decisions";
+export * from "./oneclick";

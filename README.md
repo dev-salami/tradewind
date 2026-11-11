@@ -12,6 +12,13 @@ The npm workspace contains `@tradewind/core` (pure TypeScript) and `@tradewind/w
 
 See [`docs/WEB_FOUNDATION.md`](docs/WEB_FOUNDATION.md) for routes, datasource setup, reference UI reuse, reviewer notes, and contract integration assumptions.
 
+Any-chain payment and partial-pay UX: [`docs/ONECLICK-PAY.md`](docs/ONECLICK-PAY.md).
+Quotes are dry by default; real deposit addresses require mainnet,
+`ONECLICK_LIVE_QUOTES=1`, and an explicit **Get deposit address** action.
+The server never sends buyer funds. Testnet status simulation is labelled;
+actual testnet repayment uses the buyer's NEAR wallet. Path B forwarding is
+not implemented in this brief.
+
 ## Local sandbox
 
 Testnet deployment and seed scripts (dry-run by default): [`docs/DEPLOY.md`](docs/DEPLOY.md).

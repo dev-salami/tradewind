@@ -651,6 +651,10 @@ body { color: #0b1f33; font-family: var(--font-sora), system-ui, sans-serif; }
 .tw-quote { display: grid; gap: 10px; justify-items: center; text-align: center; padding: 22px 16px; border: 1px dashed #c6d6cd; background: #f5faf7; border-radius: 20px; font-size: 12px; }
 .tw-alert { background: #fce6e7; color: #b32338; padding: 16px 20px; border-radius: 16px; font-size: 13px; }
 .tw-form { border: 0; display: grid; gap: 16px; margin: 0; padding: 0; }
+.tw-payment-amount { border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0; display: grid; gap: 12px; }
+.tw-payment-amount legend { font-size: 12px; color: var(--mute); padding: 0 6px; }
+.tw-payment-amount .tw-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.tw-payment-amount button[aria-pressed="true"] { color: var(--ok); box-shadow: inset 0 0 0 1px currentColor; }
 .tw-form label { display: grid; gap: 6px; font-size: 12px; color: var(--mute); }
 .tw-form input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; width: 100%; background: #fafaf7; }
 .tw-upload-placeholder { display: grid; place-content: center; justify-items: center; gap: 16px; border: 2px dashed #c6d6cd; background: #f5faf7; border-radius: 18px; min-height: 280px; padding: 20px; text-align: center; margin-bottom: 16px; }
