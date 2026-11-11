@@ -14,7 +14,7 @@ import { samplePdf } from "./sample-pdf";
 import { withAccountLock, withGuidedSigner } from "./signer";
 
 const allow = tokenBucket(20, 60_000);
-const units = z.string().regex(/^[1-9]\d{0,38}$/).refine(v => BigInt(v) <= (1n << 128n) - 1n);
+const units = z.string().regex(/^[1-9]\d{0,38}$/).refine(v => /^[1-9]\d{0,38}$/.test(v) && BigInt(v) <= (1n << 128n) - 1n); // regex is non-fatal in zod 3: guard BigInt
 const invoiceBody = z.object({ face: units.default("10000000"), tenor_days: z.number().int().min(1).max(365).default(60) }).strict();
 const idBody = z.object({ invoice_id: z.string().regex(/^TW-\d{4,20}$/) }).strict();
 const payBody = idBody.extend({ amount: units.optional() });
@@ -68,7 +68,7 @@ export async function guidedPost(action: Action, request: Request): Promise<Resp
         await withGuidedSigner("exporter", async account => {
           const outcome = await call(account, e.CORE_CONTRACT_ID, "create_invoice", { buyer: e.buyer, buyer_label: "Gulf Foods Trading (sample)", invoice_number: "TW-0042", face, tenor_days, doc_hash, terms_hash: null }, STORAGE);
           if (typeof outcome.status !== "object" || !("SuccessValue" in outcome.status)) throw new ApiError("Invoice creation failed", 502);
-          const created = JSON.parse(Buffer.from(outcome.status.SuccessValue, "base64").toString("utf8")) as Invoice;
+          const created = JSON.parse(Buffer.from(String(outcome.status.SuccessValue), "base64").toString("utf8")) as Invoice;
           invoice_id = idBody.parse({ invoice_id: created.id }).invoice_id;
           audit("guided_invoice", invoice_id, { doc_hash, tx_hashes });
         });
