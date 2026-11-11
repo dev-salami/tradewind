@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { env } from "./env";
 import type { VerificationResult } from "./nearai/verify-flow";
+import { migrateAutomation } from "@tradewind/core/automation-store";
 export interface Draft { draft_id: string; exporter: string; doc_hash: string; text: string; shipping_text: string; extracted_json: string; created_at: number; expires_at: number }
 export function migrate(db: DatabaseSync) {
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
@@ -14,7 +15,7 @@ export function migrate(db: DatabaseSync) {
 }
 export function repository(path: string) {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const db = new DatabaseSync(path); migrate(db);
+  const db = new DatabaseSync(path); migrate(db); migrateTelegram(db);
   return {
     db,
     putDraft(d: Draft) { db.prepare("DELETE FROM drafts WHERE expires_at <= ?").run(Date.now()); db.prepare("INSERT INTO drafts VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(d.draft_id, d.exporter, d.doc_hash, d.text, d.shipping_text, d.extracted_json, d.created_at, d.expires_at); },
@@ -28,3 +29,6 @@ export function repository(path: string) {
 }
 let instance: ReturnType<typeof repository> | undefined;
 export function store() { return instance ??= repository(env().DATABASE_PATH); }
+
+// Additive migration; existing verification/account schema stays untouched.
+export function migrateTelegram(db: DatabaseSync) { migrateAutomation(db); }
