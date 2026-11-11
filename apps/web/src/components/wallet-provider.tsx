@@ -7,16 +7,19 @@ import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
 import { setupHotWallet } from "@near-wallet-selector/hot-wallet";
 import { explorerTx, viewFunction } from "@tradewind/core";
-import { isFixtureMode, network } from "@/lib/data";
+import { isFixtureMode, network } from "@/lib/env-public";
 import { coreId, rpcUrl, txStatus } from "@/lib/near";
 import { redirectHashes, txFailed, type TxOutcome } from "@/lib/wallet-logic";
 import type { ContractTx } from "@/lib/tx";
+import { signIn } from "@/lib/auth-client";
 
 interface WalletContextValue {
   accountId: string | null; connect(): Promise<void>; disconnect(): Promise<void>;
   signAndSend(tx: ContractTx): Promise<TxOutcome | undefined>;
   callView<T>(method: string, args?: Record<string, unknown>, contract?: string): Promise<T>;
   revision: number;
+  /** NEP-413 sign-in: creates a server session cookie for the connected account. */
+  signInSession(): Promise<void>;
 }
 const WalletContext = createContext<WalletContextValue | null>(null);
 export function useWallet() { const value = useContext(WalletContext); if (!value) throw new Error("WalletProvider missing"); return value; }
@@ -78,6 +81,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     catch (e) { setError(e instanceof Error ? e.message : "Connection failed"); }
   }
   async function disconnect() { try { const wallet = await (await initialize()).wallet(); await wallet.signOut(); setAccountId(null); sessionStorage.removeItem("tw:signer"); } catch (e) { setError(String(e)); } }
+  async function signInSession() {
+    if (isFixtureMode()) throw new Error("Sample data is read-only.");
+    if (!accountId) throw new Error("Connect wallet first");
+    const wallet = await (await initialize()).wallet();
+    const result = await signIn(wallet as unknown as Parameters<typeof signIn>[0]);
+    if (result.accountId !== accountId) throw new Error("Signed-in account does not match connected wallet");
+  }
   async function signAndSend(tx: ContractTx) {
     if (isFixtureMode()) throw new Error("Sample data is read-only. Select RPC mode to sign transactions.");
     if (!accountId) throw new Error("Connect wallet first");
@@ -91,7 +101,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (txFailed(result)) throw new Error(`Transaction failed (${hash}); inspect receipt`);
     return result;
   }
-  return <WalletContext.Provider value={{ accountId, connect, disconnect, signAndSend, callView, revision }}>
+  return <WalletContext.Provider value={{ accountId, connect, disconnect, signAndSend, callView, revision, signInSession }}>
     {children}
     {error && <div className="tw-wallet-notice" role="alert">{error}<button onClick={() => setError("")}>Dismiss</button></div>}
     <div className="tw-toasts" aria-live="polite">{receipts.map(r => <div className="tw-card" key={r.hash}><strong>{r.failed ? "Transaction failed" : r.warning ? "Transaction submitted" : "Transaction confirmed"}</strong><p className="tw-break">{explorerTx(network(), r.hash) ? <a href={explorerTx(network(), r.hash)!} target="_blank" rel="noreferrer">{r.hash} ↗ NearBlocks</a> : r.hash}</p>{r.warning && <p>{r.warning}</p>}<button onClick={() => setReceipts(rows => rows.filter(x => x.hash !== r.hash))}>Dismiss</button></div>)}</div>

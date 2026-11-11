@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { explorerTx } from "@tradewind/core";
-import { isFixtureMode, network } from "@/lib/data";
+import { isFixtureMode, network } from "@/lib/env-public";
 import { useWallet } from "./wallet-provider";
 import type { ContractTx } from "@/lib/tx";
 import type { TxOutcome } from "@/lib/wallet-logic";

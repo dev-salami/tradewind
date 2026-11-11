@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { computeTermsHash, type Invoice, type Config } from "@tradewind/core";
 import { coreId } from "@/lib/near";
-import { network } from "@/lib/data";
+import { network } from "@/lib/env-public";
 import { createInvoiceTx, parseAmount } from "@/lib/tx";
 import { invoiceCreatedId, newestMatchingInvoice, type TxOutcome } from "@/lib/wallet-logic";
 import { useWallet } from "./wallet-provider";

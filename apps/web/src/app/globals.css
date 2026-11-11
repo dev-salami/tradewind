@@ -730,3 +730,5 @@ body { color: #0b1f33; font-family: var(--font-sora), system-ui, sans-serif; }
   .tw-split-legend > div { font-size: 10px; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .tw-skeleton { animation: none; } }
+label:has(> .tw-input) { display: grid; gap: 6px; font-size: 12px; color: var(--mute); }
+.tw-input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; width: 100%; background: #fafaf7; color: #0b1f33; font: inherit; font-size: 14px; }

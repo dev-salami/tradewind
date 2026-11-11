@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { repository } from "../src/server/db";
 import { POST as notify } from "../src/app/api/tx/notify/route";
 import { POST as profile, GET as account } from "../src/app/api/accounts/route";
+import { createSessionToken } from "../src/server/auth/session";
 const mocks = vi.hoisted(() => ({ store: vi.fn(), status: vi.fn() }));
 vi.mock("../src/server/db", async original => ({ ...await original<typeof import("../src/server/db")>(), store: mocks.store }));
 vi.mock("../src/lib/near", () => ({ txStatus: mocks.status, coreId: () => "core.testnet", usdcId: () => "usdc.testnet" }));
@@ -31,15 +32,19 @@ describe("wallet metadata routes (no signing keys, no network)", () => {
       expect((await notify(request("/api/tx/notify", { tx_hash: hash, account_id: "buyer.testnet" }))).status).toBe(400);
     } finally { repo.db.close(); }
   });
-  it("saves display metadata, detects existing profiles and rejects cross-origin changes", async () => {
+  it("saves display metadata only with a same-origin session for the same account", async () => {
     const repo = repository(":memory:"); mocks.store.mockReturnValue(repo);
+    vi.stubEnv("SESSION_SECRET", "s".repeat(40)); vi.stubEnv("PUBLIC_BASE_URL", "http://localhost");
+    const authed = (body: unknown, account = "exporter.testnet", origin = "http://localhost") => new Request("http://localhost/api/accounts", { method: "POST", headers: { origin, cookie: `tw_session=${createSessionToken(account)}` }, body: JSON.stringify(body) });
     try {
       const body = { account_id: "exporter.testnet", display_name: "Sample exporter", country: "NG" };
-      expect((await profile(request("/api/accounts", body))).status).toBe(200);
+      expect((await profile(new Request("http://localhost/api/accounts", { method: "POST", headers: { origin: "http://localhost" }, body: JSON.stringify(body) }))).status).toBe(401);
+      expect((await profile(authed(body, "someone.testnet"))).status).toBe(403);
+      expect((await profile(authed(body, "exporter.testnet", "http://other.test"))).status).toBe(403);
+      expect((await profile(authed(body))).status).toBe(200);
       expect(await (await account(new Request("http://localhost/api/accounts?account_id=exporter.testnet"))).json()).toEqual({ registered: true });
       expect(repo.getAccount("exporter.testnet")?.display_name).toBe("Sample exporter");
-      expect((await profile(new Request("http://localhost/api/accounts", { method: "POST", headers: { origin: "http://other.test" }, body: JSON.stringify(body) }))).status).toBe(403);
-      expect((await profile(request("/api/accounts", { ...body, display_name: "" }))).status).toBe(400);
-    } finally { repo.db.close(); }
+      expect((await profile(authed({ ...body, display_name: "" }))).status).toBe(400);
+    } finally { repo.db.close(); vi.unstubAllEnvs(); }
   });
 });

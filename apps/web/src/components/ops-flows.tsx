@@ -7,7 +7,7 @@ import * as tx from "@/lib/tx";
 import { useWallet } from "./wallet-provider";
 import { ReadState, useView, WriteButton } from "./write-controls";
 import { Card } from "./surfaces";
-import { isFixtureMode } from "@/lib/data";
+import { isFixtureMode } from "@/lib/env-public";
 export function OpsFlows() {
   const { accountId } = useWallet();
   const roles = useView<{ owner: string }>("get_roles", {}, !!accountId);

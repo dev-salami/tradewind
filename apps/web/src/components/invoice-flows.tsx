@@ -9,6 +9,7 @@ import { StorageRegistration } from "./account-flows";
 
 export function AcceptInvoice({ invoice }: { invoice: Invoice }) {
   const { accountId } = useWallet();
+  if (invoice.accepted_at) return null; // Already accepted on-chain; the pill above says so.
   return <div>{accountId && accountId !== invoice.buyer && <p role="alert">Connect {invoice.buyer} to accept this invoice. Currently connected: {accountId}.</p>}<WriteButton disabled={!!invoice.accepted_at || invoice.status !== "Verified" || (!!accountId && accountId !== invoice.buyer)} build={() => acceptInvoiceTx(coreId(), invoice.id, invoice.terms_hash)}>Accept invoice</WriteButton></div>;
 }
 export function AdvanceInvoice({ invoice }: { invoice: Invoice }) {

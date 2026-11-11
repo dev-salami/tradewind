@@ -3,15 +3,15 @@ import { useEffect, useState } from "react";
 import { formatUsd } from "@tradewind/core";
 import { coreId, usdcId } from "@/lib/near";
 import { claimTx, setApproverTx, usdcStorageDepositTx } from "@/lib/tx";
-import { isFixtureMode } from "@/lib/data";
+import { isFixtureMode } from "@/lib/env-public";
 import { useWallet } from "./wallet-provider";
 import { ReadState, useView, WriteButton } from "./write-controls";
 import { Card } from "./surfaces";
 
 export function AccountOnboarding() {
-  const { accountId } = useWallet();
+  const { accountId, signInSession } = useWallet();
   const [savedFor, setSavedFor] = useState<string | null>(null), [name, setName] = useState(""), [country, setCountry] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  // The API is display metadata only, not wallet authentication or authorization.
+  // Display metadata only; writes require a NEP-413 session for the same account.
   const [profiles, setProfiles] = useState<Record<string, boolean>>({});
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   useEffect(() => {
@@ -28,7 +28,10 @@ export function AccountOnboarding() {
   return <Card title="Set up your exporter profile"><form className="tw-form" onSubmit={async e => {
     e.preventDefault(); setBusy(true); setError("");
     try {
-      const response = await fetch("/api/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: accountId, display_name: name, country }) });
+      const save = () => fetch("/api/accounts", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: accountId, display_name: name, country }) });
+      let response = await save();
+      // Profile writes need a wallet-signed (NEP-413) session for this account.
+      if (response.status === 401) { await signInSession(); response = await save(); }
       if (!response.ok) throw new Error("Could not save profile");
       setSavedFor(accountId); setProfiles(p => ({ ...p, [accountId]: true }));
     } catch (e) { setError(String(e)); } finally { setBusy(false); }

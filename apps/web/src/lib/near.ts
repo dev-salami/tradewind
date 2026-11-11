@@ -1,5 +1,5 @@
 import { NETWORKS } from "@tradewind/core";
-import { network } from "./data";
+import { network } from "./env-public";
 import type { TxOutcome } from "./wallet-logic";
 export const rpcUrl = () => process.env.NEXT_PUBLIC_NEAR_RPC_URL || NETWORKS[network()];
 export const coreId = () => process.env.NEXT_PUBLIC_CORE_CONTRACT_ID || "";
