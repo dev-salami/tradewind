@@ -39,7 +39,7 @@ End-to-end check on a local near-sandbox (real web app + worker + contracts; ful
 ## Stretch (only if all above are done)
 
 - [ ] **S1** Gasless buyer acceptance (NEP-366 meta-transaction relayer)
-- [ ] **S2** CSV export of invoices and payments
+- [x] **S2** CSV export of invoices and payments — [#17](https://github.com/dev-salami/tradewind/pull/17) invoices + payments CSV (exact 6-dp amounts, formula-injection safe), dashboard links
 - [ ] **S3** On-chain `ecrecover` check of the TEE signature against an allowlisted signing address
 
 ## Needs the owner (not code)
