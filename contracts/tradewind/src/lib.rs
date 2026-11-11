@@ -1,3 +1,5 @@
+// create_invoice mirrors the spec ABI (8 args); construct_uint! expands code clippy flags.
+#![allow(clippy::too_many_arguments, clippy::manual_div_ceil)]
 use near_contract_standards::{
     fungible_token::FungibleToken, non_fungible_token::NonFungibleToken,
 };

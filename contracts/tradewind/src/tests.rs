@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)]
 use crate::invoice::Verification;
 use crate::*;
 use near_contract_standards::{
