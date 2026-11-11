@@ -38,6 +38,8 @@ Adapted the supplied local reference's Card, Kpi, Avatar, Pill, DataTable, Selec
 
 ## Deliberate gaps / contract integration assumptions
 
+> Historical note: this section describes the first web PR (#2). Wallet flows (#9), 1Click pay (#12), guided mode (#10, #13) and RPC arg names have since been implemented and aligned with the Rust contract views; see the README and the per-feature docs.
+
 - All write controls, wallet connect, invoice upload, LP position, Telegram linking, payment quotes, and browser proof verification are deliberately disabled. Cash on hand is unknown without a wallet/balance view, not inferred from historical invoice receipts.
 - Invoice views have timestamps and payment references, **not transaction hashes**. Timeline slots explicitly report missing transaction links. NearBlocks account links are labelled as account links, never represented as transaction proof. The later indexer should supply lifecycle/payment transaction hashes and origin-chain receipts.
 - §6.8 does not expose a historical pool view. RPC `poolHistory()` returns an empty series until an event indexer is available; it does not fabricate history from current totals.
