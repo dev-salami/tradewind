@@ -5,6 +5,19 @@ import { TopBanner } from "../src/components/top-banner";
 import { WaterfallBars } from "../src/components/waterfall";
 import { waterfallWidths } from "../src/lib/waterfall";
 import type { InvoiceStatus } from "@tradewind/core";
+import { SAMPLE_EXPORTER } from "@tradewind/core";
+import { ExportLinks } from "../src/components/export-links";
+describe("CSV download links", () => {
+  it.each(["exporter.near", SAMPLE_EXPORTER])("offers both downloads for %s", accountId => {
+    render(<ExportLinks accountId={accountId} />);
+    for (const kind of ["invoices", "payments"]) {
+      const link = screen.getByRole("link", { name: `Export ${kind} CSV` });
+      expect(link).toHaveAttribute("href", `/api/export/${kind}?exporter=${encodeURIComponent(accountId)}`);
+      expect(link).toHaveAttribute("download");
+      expect(link).toHaveClass("tw-ghost");
+    }
+  });
+});
 describe("honest network labels", () => {
   it("labels sample testnet and config-derived clock", () => {
     render(<TopBanner network="testnet" secondsPerDay={10} fixtures />);
