@@ -4,7 +4,7 @@ import { ApiError } from "../errors";
 
 export function guidedConfig() {
   // Check the raw network first: mainnet must always produce 403, even with bad config.
-  if (process.env.NEAR_NETWORK === "mainnet") throw new ApiError("Guided mode is unavailable on mainnet", 403);
+  if ((process.env.NEAR_NETWORK || process.env.NEXT_PUBLIC_NEAR_NETWORK) === "mainnet") throw new ApiError("Guided mode is unavailable on mainnet", 403);
   const exporter = process.env.GUIDED_EXPORTER_ACCOUNT_ID;
   const exporterKey = process.env.GUIDED_EXPORTER_PRIVATE_KEY;
   const buyer = process.env.GUIDED_BUYER_ACCOUNT_ID;

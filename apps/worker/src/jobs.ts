@@ -1,6 +1,8 @@
 import { advanceSent, buyerAccepted, buyerReminder, checked, checkFailed, defaulted, explorerTx, invoiceTransitions, keeperActions, lpSharePrice, overdue, paymentReceived, paymentSplits, reminderSent, reminderSteps, repaid, type BuyerRecord, type Config, type Invoice, type Pool, type TelegramCard } from "@tradewind/core";
 import type { AutomationStore } from "@tradewind/core/automation-store";
 import { makeApproveCard, type ApprovalDependencies } from "../../web/src/server/telegram/callbacks";
+import type { GuidedSession } from "../../web/src/server/guided/session-store";
+import { guidedCleanupCall } from "./guided-near";
 export const log = (job: string, status: string, fields: Record<string, string | number> = {}) => console.log(JSON.stringify({ time: Date.now(), job, status, ...fields }));
 export interface JobDependencies extends ApprovalDependencies {
   list(from: number): Promise<Invoice[]>; pool(): Promise<Pool>; config(): Promise<Config>;
@@ -94,6 +96,38 @@ export async function keeper(s: AutomationStore, d: JobDependencies, invoices: I
     try { const tx = await d.keeper(action.method, action.id); s.db.prepare("INSERT OR IGNORE INTO automation_receipts VALUES (?, ?, ?)").run(action.id, tx, action.method); log("keeper", "sent", { invoice_id: action.id, tx_hash: tx }); }
     catch { log("keeper", "failed", { invoice_id: action.id }); }
   }
+}
+export function guidedCleanupDecision(invoice: Invoice, createdAt: number, now: number, staleMinutes = 10): "cancel" | "repay" | null {
+  if (now - createdAt < staleMinutes * 60_000) return null;
+  if (!invoice.advance && ["Created", "Verified", "Accepted"].includes(invoice.status)) return "cancel";
+  if (invoice.advance && ["Funded", "PartiallyPaid", "Defaulted"].includes(invoice.status) && BigInt(invoice.face) > BigInt(invoice.paid.total) - BigInt(invoice.paid.overpaid)) return "repay";
+  return null;
+}
+// Returns protected IDs even after an RPC failure, so the keeper never defaults demo buyers.
+export async function guidedCleanup(s: AutomationStore, d: JobDependencies, invoices: Invoice[], now = Date.now(), send = guidedCleanupCall): Promise<Set<string>> {
+  const protectedIds = new Set<string>();
+  if (process.env.NEAR_NETWORK === "mainnet" || d.network === "mainnet" || d.sample) return protectedIds;
+  if (!s.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='guided_sessions'").get()) return protectedIds;
+  const minutes = Number(process.env.GUIDED_STALE_MINUTES || 10);
+  if (!Number.isFinite(minutes) || minutes <= 0) throw new Error("Invalid GUIDED_STALE_MINUTES");
+  const sessions = s.db.prepare("SELECT * FROM guided_sessions").all() as unknown as GuidedSession[];
+  for (const invoice of invoices) {
+    const session = sessions.find(row => row.buyer_account === invoice.buyer);
+    if (!session || invoice.exporter !== process.env.GUIDED_EXPORTER_ACCOUNT_ID) continue;
+    protectedIds.add(invoice.id);
+    if (process.env.GUIDED_ENABLED !== "1") continue; // Disabling signing must not expose abandoned sessions to keeper defaulting.
+    const action = guidedCleanupDecision(invoice, Number(BigInt(invoice.created_at) / 1_000_000n), now, minutes);
+    if (!action) continue;
+    try {
+      const hash = await send(action, invoice, session);
+      s.db.prepare("INSERT OR IGNORE INTO automation_receipts VALUES (?, ?, ?)").run(invoice.id, hash, `guided_${action}`);
+      log("guidedCleanup", action, { invoice_id: invoice.id, tx_hash: hash });
+    } catch (error) {
+      const missing = action === "cancel" && /MethodNotFound|method.*(not found|does not exist)|cannot find.*method/i.test(String(error));
+      log("guidedCleanup", missing ? "cancel_unavailable" : "failed", { invoice_id: invoice.id, error: String(error).slice(0, 300) });
+    }
+  }
+  return protectedIds;
 }
 export function reminders(s: AutomationStore, d: JobDependencies, invoices: Invoice[], now: string, config: Config) {
   for (const i of invoices) {

@@ -76,7 +76,7 @@ export async function chainRpc<T>(url: string, method: "block" | "chunk" | "EXPE
           cooldown.set(url, Date.now() + 250 * 2 ** attempt);
           throw new Error(`NEAR RPC rate limited: ${detail}`);
         }
-        if (/TIMEOUT_ERROR|INTERNAL_ERROR/.test(detail)) throw new Error(`Transient NEAR RPC error: ${detail}`);
+        if (method !== "EXPERIMENTAL_tx_status" && /TIMEOUT_ERROR|INTERNAL_ERROR/.test(detail)) throw new Error(`Transient NEAR RPC error: ${detail}`);
         throw new RpcReadError(body.error);
       }
       if (body.result === undefined) throw new Error("Missing RPC result");
@@ -89,7 +89,7 @@ export async function chainRpc<T>(url: string, method: "block" | "chunk" | "EXPE
 }
 export const block = (url: string, at: "final" | "optimistic" | number | { block_id: string }) => chainRpc<RpcBlock>(url, "block", typeof at === "object" ? at : typeof at === "number" ? { block_id: at } : { finality: at });
 export const chunk = (url: string, chunk_hash: string) => chainRpc<RpcChunk>(url, "chunk", { chunk_id: chunk_hash });
-export const txStatus = (url: string, hash: string, sender: string) => chainRpc<RpcTxStatus>(url, "EXPERIMENTAL_tx_status", { tx_hash: hash, sender_account_id: sender, wait_until: "FINAL" });
+export const txStatus = (url: string, hash: string, sender: string) => chainRpc<RpcTxStatus>(url, "EXPERIMENTAL_tx_status", { tx_hash: hash, sender_account_id: sender, wait_until: "NONE" });
 /** Historical view, deliberately separate from the current-state viewFunction API. */
 export async function poolAtBlock(url: string, contract: string, height: number): Promise<Pool> {
   const value = await chainRpc<{ result: number[] }>(url, "query", { request_type: "call_function", block_id: height, account_id: contract, method_name: "get_pool", args_base64: "e30=" });

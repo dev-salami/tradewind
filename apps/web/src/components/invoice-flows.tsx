@@ -27,7 +27,7 @@ export function AdvanceInvoice({ invoice }: { invoice: Invoice }) {
     <WriteButton disabled={!!accountId && accountId !== invoice.exporter || !preview.value?.eligible || storage.loading || storage.value == null || !!storage.error} build={async () => {
       // Fresh preview binds the wallet approval to the current rate and amount.
       const fresh = await callView<AdvancePreview>("preview_advance", { id: invoice.id });
-      if (!fresh.eligible) throw new Error(fresh.reason || "Not eligible");
+      if (!fresh.eligible) throw new Error(fresh.reason ?? "Not eligible");
       return requestAdvanceTx(coreId(), invoice.id, invoice.terms_hash, fresh.advance);
     }} onSuccess={async () => {
       const updated = await callView<Invoice>("get_invoice", { id: invoice.id });

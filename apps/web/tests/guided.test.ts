@@ -8,31 +8,39 @@ import { POST as statusPost } from "../src/app/api/guided/status/route";
 import { withAccountLock } from "../src/server/guided/signer";
 import { samplePdf } from "../src/server/guided/sample-pdf";
 import { createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
+import { encryptGuidedKey, migrateGuided, signGuidedSession } from "../src/server/guided/session-store";
 
-const mocks = vi.hoisted(() => ({ call: vi.fn(), view: vi.fn(), key: vi.fn(), connect: vi.fn(), audit: vi.fn(), putTx: vi.fn(), putVerification: vi.fn(), verify: vi.fn() }));
+const mocks = vi.hoisted(() => ({ db: undefined as DatabaseSync | undefined, create: vi.fn(), call: vi.fn(), view: vi.fn(), key: vi.fn(), connect: vi.fn(), audit: vi.fn(), putTx: vi.fn(), putVerification: vi.fn(), verify: vi.fn() }));
 vi.mock("near-api-js", () => ({
   Account: class {
     constructor(_connection: unknown, readonly id: string) {}
     get accountId() { return this.id; }
     functionCall(args: unknown) { return mocks.call(this.id, args); }
     viewFunction(args: unknown) { return mocks.view(this.id, args); }
+    createAccount(...args: unknown[]) { return mocks.create(...args); }
   },
-  KeyPair: { fromString: (value: string) => value },
+  KeyPair: { fromString: (value: string) => ({ toString: () => value, getPublicKey: () => "test-public-key" }), fromRandom: () => ({ toString: () => "test-private-key", getPublicKey: () => "test-public-key" }) },
+  utils: { format: { parseNearAmount: () => "500000000000000000000000" } },
   keyStores: { InMemoryKeyStore: class { setKey(...args: unknown[]) { return mocks.key(...args); } } },
   connect: mocks.connect,
 }));
-vi.mock("../src/server/db", () => ({ store: () => ({ audit: mocks.audit, putTx: mocks.putTx, putVerification: mocks.putVerification }) }));
+vi.mock("../src/server/db", () => ({ store: () => ({ db: mocks.db!, audit: mocks.audit, putTx: mocks.putTx, putVerification: mocks.putVerification }) }));
 vi.mock("../src/server/nearai/verify-flow", () => ({ runVerification: mocks.verify }));
 
 const routes = [invoicePost, acceptPost, advancePost, payPost, statusPost];
 const exporter = "sample-exporter.testnet", buyer = "sample-buyer.testnet";
+const session = "a".repeat(32);
 const invoice = { id: "TW-0042", exporter, buyer, status: "Verified", terms_hash: "a".repeat(64), face: "10000000", paid: { total: "0", overpaid: "0" } };
 const proof = { verdict: "pass", mock: true, verified_ok: false, model_id: "mock/sample-parser", request_hash: "b".repeat(64), response_hash: "c".repeat(64), signature: "MOCK-NOT-A-SIGNATURE", signing_address: "mock", signing_algo: "mock", chat_id: "mock-chat" };
 let ip = 0;
 function request(body: unknown = {}, address = `192.0.2.${++ip}`) {
-  return new Request("http://localhost/api/guided", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "x-forwarded-for": address }, body: JSON.stringify(body) });
+  return new Request("http://localhost/api/guided", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "x-forwarded-for": address, cookie: `tw_guided=${signGuidedSession(session)}` }, body: JSON.stringify(body) });
 }
 beforeEach(() => {
+  vi.stubEnv("SESSION_SECRET", "test-only-session-secret-at-least-32-bytes");
+  mocks.db = new DatabaseSync(":memory:"); migrateGuided(mocks.db);
+  mocks.db.prepare("INSERT INTO guided_sessions (session_id,buyer_account,encrypted_key,created_at,ready) VALUES (?,?,?,?,1)").run(session, buyer, encryptGuidedKey("test-only-buyer"), Date.now());
   vi.stubEnv("NEAR_NETWORK", "testnet"); vi.stubEnv("AI_MODE", "mock"); vi.stubEnv("PUBLIC_BASE_URL", "http://localhost");
   vi.stubEnv("GUIDED_ENABLED", "1"); vi.stubEnv("GUIDED_EXPORTER_ACCOUNT_ID", exporter); vi.stubEnv("GUIDED_BUYER_ACCOUNT_ID", buyer);
   vi.stubEnv("GUIDED_EXPORTER_PRIVATE_KEY", "test-only-exporter"); vi.stubEnv("GUIDED_BUYER_PRIVATE_KEY", "test-only-buyer");
@@ -40,6 +48,7 @@ beforeEach(() => {
   vi.stubEnv("CORE_CONTRACT_ID", "core.testnet"); vi.stubEnv("USDC_CONTRACT_ID", "usdc.testnet");
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Network forbidden in guided tests"); }));
   mocks.connect.mockResolvedValue({ connection: {} }); mocks.key.mockResolvedValue(undefined);
+  mocks.create.mockResolvedValue({});
   mocks.verify.mockResolvedValue(proof);
   mocks.call.mockImplementation(async (_account, call) => ({ transaction: { hash: `${call.methodName}-hash` }, status: { SuccessValue: Buffer.from(JSON.stringify(invoice)).toString("base64") } }));
   mocks.view.mockImplementation(async (_account, call) => {
@@ -50,9 +59,14 @@ beforeEach(() => {
     throw new Error("Unexpected view");
   });
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
+afterEach(() => { mocks.db?.close(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("guided route safety", () => {
+  it("refuses mainnet from public-only network configuration before missing keys", async () => {
+    vi.stubEnv("NEAR_NETWORK", ""); vi.stubEnv("NEXT_PUBLIC_NEAR_NETWORK", "mainnet"); vi.stubEnv("GUIDED_ENABLED", "");
+    expect((await statusPost(request())).status).toBe(403);
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
   it.each(routes)("always refuses mainnet before configuration, origin or payload checks: %s", async route => {
     vi.stubEnv("NEAR_NETWORK", "mainnet"); vi.stubEnv("GUIDED_ENABLED", "");
     const response = await route(new Request("http://localhost", { method: "POST", body: "not json" }));
@@ -111,6 +125,21 @@ describe("guided route safety", () => {
 });
 
 describe("guided transaction methods", () => {
+  it("sets a signed session cookie on the first invoice and signs subsequent acceptance as its new buyer", async () => {
+    const first = request(); first.headers.delete("cookie");
+    const response = await invoicePost(first);
+    expect(response.status).toBe(200);
+    const cookie = response.headers.get("set-cookie")!;
+    expect(cookie).toMatch(/^tw_guided=[a-f0-9]{32}\./); expect(cookie).toContain("HttpOnly");
+    const created = mocks.call.mock.calls.find(([, call]) => call.methodName === "create_invoice")![1];
+    expect(created.args.buyer).toMatch(/^g[0-9a-f]{8}\.sample-buyer\.testnet$/);
+    expect(created.args.invoice_number).toMatch(/^G-[0-9a-f]{8}-1$/);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    mocks.view.mockResolvedValue({ ...invoice, buyer: created.args.buyer });
+    const accept = request({ invoice_id: invoice.id }); accept.headers.set("cookie", cookie.split(";")[0]);
+    expect((await acceptPost(accept)).status).toBe(200);
+    expect(mocks.call).toHaveBeenLastCalledWith(created.args.buyer, expect.objectContaining({ methodName: "accept_invoice" }));
+  });
   it("creates from in-memory PDF, hashes before verification, and attests", async () => {
     mocks.verify.mockImplementation(async input => {
       const create = mocks.call.mock.calls.find(([, call]) => call.methodName === "create_invoice")![1];
@@ -136,9 +165,9 @@ describe("guided transaction methods", () => {
   });
   it("sample PDFs pass the actual existing mock verification flow", async () => {
     const { runVerification } = await vi.importActual<typeof import("../src/server/nearai/verify-flow")>("../src/server/nearai/verify-flow");
-    for (const [face, tenor_days] of [["10000000", 60], ["25000001", 30]] as const) {
-      const pdfBytes = await samplePdf(face, tenor_days);
-      const result = await runVerification({ invoiceId: invoice.id, pdfBytes, formFields: { exporter, buyer, buyer_label: "Gulf Foods Trading (sample)", invoice_number: "TW-0042", face, tenor_days, currency: "USDC" } });
+    for (const [face, tenor_days, invoice_number] of [["10000000", 60, "TW-0042"], ["25000001", 30, "G-0123abcd-2"]] as const) {
+      const pdfBytes = await samplePdf(face, tenor_days, invoice_number);
+      const result = await runVerification({ invoiceId: invoice.id, pdfBytes, formFields: { exporter, buyer, buyer_label: "Gulf Foods Trading (sample)", invoice_number, face, tenor_days, currency: "USDC" } });
       expect(result.verdict).toBe("pass"); expect(result.mock).toBe(true); expect(pdfBytes.every(byte => byte === 0)).toBe(true);
     }
     expect(fetch).not.toHaveBeenCalled();
@@ -153,8 +182,25 @@ describe("guided transaction methods", () => {
     expect(mocks.call).toHaveBeenCalledExactlyOnceWith(exporter, { contractId: "core.testnet", methodName: "request_advance", args: { id: invoice.id, expected_terms_hash: invoice.terms_hash, min_advance: "7000000" }, gas: 100_000_000_000_000n, attachedDeposit: 0n });
   });
   it("rejects ineligible advances without signing", async () => {
-    mocks.view.mockImplementation(async (_account, call) => call.methodName === "get_invoice" ? invoice : { eligible: false });
-    expect((await advancePost(request({ invoice_id: invoice.id }))).status).toBe(409); expect(mocks.call).not.toHaveBeenCalled();
+    mocks.view.mockImplementation(async (_account, call) => call.methodName === "get_invoice" ? invoice : { eligible: false, reason: "Buyer exposure limit reached" });
+    const response = await advancePost(request({ invoice_id: invoice.id }));
+    expect(response.status).toBe(409); expect((await response.json()).error).toBe("Not eligible: Buyer exposure limit reached"); expect(mocks.call).not.toHaveBeenCalled();
+  });
+  it("returns sandbox hashes without explorer links", async () => {
+    vi.stubEnv("NEAR_NETWORK", "sandbox");
+    const response = await advancePost(request({ invoice_id: invoice.id }));
+    expect(await response.json()).toMatchObject({ tx_hashes: ["request_advance-hash"], tx_links: [] });
+  });
+  it("increments invoice numbers in the same session", async () => {
+    await invoicePost(request()); await invoicePost(request());
+    expect(mocks.call.mock.calls.filter(([, call]) => call.methodName === "create_invoice").map(([, call]) => call.args.invoice_number)).toEqual(["G-aaaaaaaa-1", "G-aaaaaaaa-2"]);
+  });
+  it("rejects mutation without a session or with a different session buyer", async () => {
+    const noCookie = request({ invoice_id: invoice.id }); noCookie.headers.delete("cookie");
+    expect((await acceptPost(noCookie)).status).toBe(403);
+    mocks.view.mockResolvedValue({ ...invoice, buyer: "another-session.testnet" });
+    expect((await acceptPost(request({ invoice_id: invoice.id }))).status).toBe(403);
+    expect(mocks.call).not.toHaveBeenCalled();
   });
   function payments(balance = "3000000", paid = "0") {
     mocks.view.mockImplementation(async (_account, call) => {
