@@ -37,6 +37,28 @@ beforeEach(() => {
 });
 afterEach(() => { repo.db.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("safe payment API", () => {
+  it("refuses simulator mode on mainnet before any upstream calls", async () => {
+    vi.stubEnv("ONECLICK_SIMULATOR", "1");
+    const response = await quotePost(request({ ...body, live: true }), context);
+    expect(response.status).toBe(403); expect((await response.json()).error).toContain("refused on mainnet"); expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("persists a non-dry simulated Path B intent against the local fake only", async () => {
+    vi.stubEnv("ONECLICK_SIMULATOR", "1"); vi.stubEnv("NEAR_NETWORK", "sandbox"); vi.stubEnv("ONECLICK_BASE_URL", "http://127.0.0.1:4444");
+    vi.stubEnv("SETTLEMENT_PATH", "B"); vi.stubEnv("RELAYER_ACCOUNT_ID", "relayer.test.near"); vi.stubEnv("USDC_CONTRACT_ID", "usdc.test.near");
+    const response = await quotePost(request({ ...body, live: true }), context), result = await response.json();
+    expect(response.status).toBe(200); expect(result).toMatchObject({ simulated: true, dry: false, path: "B", preview: true });
+    expect(quoteCalls()[0]).toMatchObject({ recipient: "relayer.test.near", dry: false });
+    expect(repo.db.prepare("SELECT path, network FROM payment_intents WHERE pid=?").get(result.pid)).toEqual({ path: "B", network: "sandbox" });
+    expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith("http://127.0.0.1:4444/"))).toBe(true);
+  });
+  it("simulator refuses a non-local upstream and still honors dry override", async () => {
+    vi.stubEnv("ONECLICK_SIMULATOR", "1"); vi.stubEnv("NEAR_NETWORK", "sandbox");
+    expect((await quotePost(request({ ...body, live: true }), context)).status).toBe(503); expect(fetchMock).not.toHaveBeenCalled();
+    vi.stubEnv("ONECLICK_BASE_URL", "http://localhost:4444");
+    const original = request({ ...body, live: true });
+    const result = await (await quotePost(new Request(`${original.url}?dry=1`, { method: "POST", headers: original.headers, body: await original.text() }), context)).json();
+    expect(result).toMatchObject({ simulated: true, dry: true }); expect(result.pid).toBeUndefined();
+  });
   it.each([undefined, false, true])("every quote stays dry without the env flag (live=%s)", async live => {
     const r = await quotePost(request({ ...body, live }), context), result = await r.json();
     expect(r.status).toBe(200); expect(result.dry).toBe(true); expect(result).not.toHaveProperty("depositAddress"); expect(result).not.toHaveProperty("depositMemo"); expect(result).not.toHaveProperty("pid");

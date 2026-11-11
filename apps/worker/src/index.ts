@@ -5,6 +5,7 @@ import { view, signedCall } from "../../web/src/server/telegram/near";
 import { flushNotifications } from "../../web/src/server/telegram/notify";
 import { guidedCleanup, indexer, keeper, reminders, log, type JobDependencies } from "./jobs";
 import { indexChain, indexerOptions } from "./chain-indexer";
+import { relayerForward } from "./relayer";
 // DATABASE_PATH should be absolute: npm workspace scripts have different working directories.
 const s = openAutomationStore(process.env.DATABASE_PATH || "../web/data/tradewind.db");
 const d: JobDependencies = { ...approvalDependencies(), list: from => view<Invoice[]>("list_invoices", { from_index: String(from), limit: 50 }), pool: () => view<Pool>("get_pool"), config: () => view<Config>("get_config"), keeper: (method, id) => signedCall("KEEPER", method, { id }), keeperConfigured: !!process.env.KEEPER_ACCOUNT_ID && !!process.env.KEEPER_PRIVATE_KEY };
@@ -34,6 +35,7 @@ async function tick() {
     }
     try { reminders(s, d, invoices, now, config); } catch { log("reminders", "failed"); }
   }
+  if (!fixtures) try { await relayerForward(s); } catch { log("relayer", "failed"); }
   try { await flushNotifications(s); } catch { log("notifier", "failed"); }
   // Chain backfill runs last so slow RPC scans never delay keeper, cleanup or notifications.
   if (!fixtures) try { log("chain_indexer", "complete", await indexChain(s.db, indexerOptions())); } catch (error) { log("chain_indexer", "failed", { error: error instanceof Error ? error.message.slice(0, 200) : "unknown" }); }
