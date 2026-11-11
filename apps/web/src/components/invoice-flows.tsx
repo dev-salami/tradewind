@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { formatUsd, type AdvancePreview, type Invoice } from "@tradewind/core";
+import { formatUsd, validateRepayAmount, type AdvancePreview, type Invoice } from "@tradewind/core";
+import { network } from "@/lib/env-public";
 import { coreId, usdcId } from "@/lib/near";
 import { acceptInvoiceTx, cancelInvoiceTx, requestAdvanceTx, repayDirectTx, parseAmount } from "@/lib/tx";
 import { useWallet } from "./wallet-provider";
@@ -40,17 +41,17 @@ export function CancelInvoice({ invoice }: { invoice: Invoice }) {
   const { accountId } = useWallet();
   return accountId === invoice.exporter && ["Created", "Verified", "Rejected"].includes(invoice.status) ? <WriteButton build={() => cancelInvoiceTx(coreId(), invoice.id)}>Cancel invoice</WriteButton> : null;
 }
-export function DirectPayment({ invoice, minPayment }: { invoice: Invoice; minPayment: string }) {
-  const { accountId, callView } = useWallet();
+export function DirectPayment({ invoice, minPayment, amountUnits }: { invoice: Invoice; minPayment: string; amountUnits?: string }) {
+  const { callView } = useWallet();
   const [amount, setAmount] = useState("");
-  const [chain, setChain] = useState("NEAR");
   const outstanding = BigInt(invoice.face) - BigInt(invoice.paid.total) + BigInt(invoice.paid.overpaid);
   const full = `${outstanding / 1000000n}.${(outstanding % 1000000n).toString().padStart(6, "0")}`;
-  return <div className="tw-form"><label>Chain<select value={chain} onChange={e => setChain(e.target.value)}>{["NEAR", "Base", "Arbitrum", "Solana", "Ethereum"].map(c => <option key={c}>{c}</option>)}</select></label>{chain !== "NEAR" ? <p>1Click payments arrive in the next step. No quote or deposit address has been created.</p> : <><p>Direct USDC payment on NEAR. Minimum partial payment {formatUsd(minPayment)}; a smaller final balance can be paid in full.</p><label>USDC amount<input inputMode="decimal" placeholder={full} value={amount} onChange={e => setAmount(e.target.value)} /></label><button className="tw-ghost" onClick={() => setAmount(full)}>Pay full {formatUsd(outstanding)}</button>{accountId && accountId !== invoice.buyer && <p>Connect buyer {invoice.buyer} to pay here.</p>}<WriteButton disabled={outstanding <= 0n || !["Accepted", "Funded", "PartiallyPaid", "Defaulted"].includes(invoice.status) || !!accountId && accountId !== invoice.buyer} build={async () => {
-      const units = parseAmount(amount || full);
+  return <div className="tw-form"><p>Direct USDC payment on NEAR. Minimum partial payment {formatUsd(minPayment)}; a smaller final balance can be paid in full.</p>{amountUnits === undefined && <><label>USDC amount<input inputMode="decimal" placeholder={full} value={amount} onChange={e => setAmount(e.target.value)} /></label><button className="tw-ghost" onClick={() => setAmount(full)}>Pay full {formatUsd(outstanding)}</button></>}<WriteButton disabled={outstanding <= 0n || amountUnits === "" || !["Accepted", "Funded", "PartiallyPaid", "Defaulted"].includes(invoice.status)} build={async () => {
+      const units = amountUnits ?? parseAmount(amount || full);
       const [fresh, config] = await Promise.all([callView<Invoice>("get_invoice", { id: invoice.id }), callView<{ min_payment: string }>("get_config")]);
       const due = BigInt(fresh.face) - BigInt(fresh.paid.total) + BigInt(fresh.paid.overpaid);
-      if (BigInt(units) > due || (BigInt(units) < BigInt(config.min_payment) && BigInt(units) !== due)) throw new Error("Payment must be at least min_payment and not exceed outstanding (or pay the final balance exactly)");
+      if (!["Accepted", "Funded", "PartiallyPaid", "Defaulted"].includes(fresh.status)) throw new Error("Invoice is not payable");
+      validateRepayAmount(BigInt(units), due, BigInt(config.min_payment));
       return repayDirectTx(usdcId(), coreId(), invoice.id, units);
-    }}>Pay USDC on NEAR</WriteButton></>}</div>;
+    }}>{network() === "mainnet" ? "Pay on NEAR (USDC)" : "Pay on NEAR (testnet USDC)"}</WriteButton></div>;
 }

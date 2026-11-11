@@ -14,6 +14,14 @@ export function migrate(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY, action TEXT NOT NULL, invoice_id TEXT, detail TEXT NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS tx_log (tx_hash TEXT PRIMARY KEY, account_id TEXT NOT NULL, invoice_id TEXT, created_at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS tx_log_invoice ON tx_log(invoice_id);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS payment_intents (
+    pid TEXT PRIMARY KEY, payment_ref TEXT NOT NULL UNIQUE, network TEXT NOT NULL,
+    invoice_id TEXT NOT NULL, origin_asset TEXT NOT NULL, amount_out_e6 TEXT NOT NULL,
+    amount_in TEXT NOT NULL, deposit_address TEXT NOT NULL, deposit_memo TEXT,
+    refund_to TEXT NOT NULL, deadline TEXT NOT NULL, path TEXT NOT NULL CHECK(path IN ('A','B','C')),
+    oneclick_status TEXT NOT NULL, origin_tx TEXT, near_tx TEXT, settled_tx TEXT,
+    quote_json TEXT NOT NULL, created_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS payment_intents_invoice ON payment_intents(network, invoice_id);`);
 }
 export function repository(path: string) {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true, mode: 0o700 });

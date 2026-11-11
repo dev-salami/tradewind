@@ -11,6 +11,9 @@ const schema = z.object({
   NEARAI_MODEL_VISION: z.string().default("Qwen/Qwen3-VL-30B-A3B-Instruct"),
   NEARAI_BASE_URL: z.string().url().default("https://cloud-api.near.ai/v1"),
   DATABASE_PATH: z.string().default("./data/tradewind.db"),
+  ONECLICK_BASE_URL: z.string().url().default("https://1click.chaindefuser.com"),
+  ONECLICK_JWT: z.string().optional(), ONECLICK_LIVE_QUOTES: z.string().default("0"),
+  SETTLEMENT_PATH: z.enum(["A", "B"]).default("A"), RELAYER_ACCOUNT_ID: z.string().optional(),
   SESSION_SECRET: z.string().default(""), PUBLIC_BASE_URL: z.string().url().default("http://localhost:3000"),
   AI_MODE: z.enum(["live", "mock"]).optional(),
 });
