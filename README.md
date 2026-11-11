@@ -14,6 +14,8 @@ See [`docs/WEB_FOUNDATION.md`](docs/WEB_FOUNDATION.md) for routes, datasource se
 
 ## Local sandbox
 
+Testnet deployment and seed scripts (dry-run by default): [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 Prerequisites: Rust (stable + `wasm32-unknown-unknown`), `cargo-near`, and `make`.
 Linux also needs OpenSSL headers (`libssl-dev`) and normally `pkg-config`.
 Without `pkg-config`, export `OPENSSL_LIB_DIR` and `OPENSSL_INCLUDE_DIR` to
