@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { makeFixtures, sha256Hex } from "@tradewind/core";
+import { recoverMessageAddress } from "viem";
 import { repository } from "../src/server/db";
 import { POST as draftPost } from "../src/app/api/invoices/draft/route";
 import { POST as verifyPost } from "../src/app/api/invoices/[id]/verify/route";
@@ -41,11 +42,25 @@ describe("API integration with mock inference, in-memory SQLite and no network",
       expect(result.tx_hash).toBe("test-only-tx"); expect(result.mock).toBe(true);
       expect(mocks.record).toHaveBeenCalledOnce();
       expect(repo.getDraft(draft.draft_id)).toBeUndefined();
+      const stored = repo.getVerification("TW-0042")!;
+      expect(stored.signature_kind).toBe("mock");
+      mocks.invoice.mockResolvedValue({ ...invoice, verification: { ...stored, at: "0" } });
       const raw = await proofGet(new Request("http://localhost/api/verify/TW-0042"), params);
+      expect(raw.status).toBe(200);
       const proof = await raw.json();
+      expect(proof.source).toBe("chain"); expect(proof.mock).toBe(true);
+      expect(proof.model_id).toBe("mock/sample-parser");
+      expect(proof.request_hash).toMatch(/^[a-f0-9]{64}$/); expect(proof.response_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(proof.text).toBe(`${proof.model_id}:${proof.request_hash}:${proof.response_hash}`);
-      expect(proof.signature_kind).toBe("mock"); expect(proof).not.toHaveProperty("extracted");
+      expect(proof.signature).toMatch(/^0x[a-f0-9]{130}$/i);
+      const recovered = await recoverMessageAddress({ message: proof.text, signature: proof.signature });
+      expect(recovered.toLowerCase()).toBe("0x2c7536e3605d9c16a7a3d7b1898e529396a65c23");
+      expect(recovered.toLowerCase()).toBe(proof.signing_address.toLowerCase());
+      expect(proof).not.toHaveProperty("extracted");
       expect(proof).not.toHaveProperty("checks"); expect(proof).not.toHaveProperty("shipping_text");
+      mocks.invoice.mockRejectedValueOnce(new Error("Fixture RPC unavailable"));
+      const cached = await (await proofGet(new Request("http://localhost/api/verify/TW-0042"), params)).json();
+      expect(cached).toMatchObject({ source: "db", signature_kind: "mock", signature: proof.signature, text: proof.text });
     } finally { repo.db.close(); }
   });
   it("blocks missing drafts, wrong status, mismatched document and mainnet mock", async () => {

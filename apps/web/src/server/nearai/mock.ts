@@ -2,8 +2,15 @@ import "server-only";
 import { hashBytes, type Proof } from "./client";
 import { CHECK_IDS, type FormFields, type ModelResult } from "./prompt";
 import { ApiError } from "../errors";
+import { privateKeyToAccount } from "viem/accounts";
+import { hashMessage } from "viem";
+import { secp256k1 } from "@noble/curves/secp256k1";
+import { env } from "../env";
+// publicly known test key; never use for anything real; mock/sandbox only
+export const PUBLIC_TEST_SIGNER_KEY = "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318";
 export function assertMockNetwork(network: string) { if (network === "mainnet") throw new ApiError("Mock verdicts cannot be recorded on mainnet", 403); }
 export function mockCompletion(form: FormFields, text: string, shipping?: string) {
+  assertMockNetwork(env().NEAR_NETWORK);
   // Deliberately narrow, deterministic SAMPLE fixture parser. Never presented as AI inference.
   const find = (pattern: RegExp) => text.match(pattern)?.[1] ?? "";
   const total = find(/Total\s*:?\s*([\d.]+)\s*USDC/i);
@@ -24,6 +31,10 @@ export function mockCompletion(form: FormFields, text: string, shipping?: string
     if (c.id === "shipping_doc_consistent" && shipping) c.ok = !!buyer && shipping.includes(buyer) && /W320/i.test(shipping);
   }
   const request_hash = hashBytes(JSON.stringify({ form, text })), response_hash = hashBytes(JSON.stringify(result));
-  const proof: Proof = { model_id: "mock/sample-parser", request_hash, response_hash, chat_id: `mock-${request_hash.slice(0, 20)}`, signature: "MOCK-NOT-A-SIGNATURE", signing_address: "0x000…mock", signing_algo: "mock", signature_kind: "mock", text: `mock/sample-parser:${request_hash}:${response_hash}`, verified_ok: false, mock: true, attestation_nonce: "", verification_reason: "MOCK — not a TEE result" };
+  const account = privateKeyToAccount(PUBLIC_TEST_SIGNER_KEY);
+  const signedText = `mock/sample-parser:${request_hash}:${response_hash}`;
+  // Synchronous EIP-191 signing preserves the deterministic fixture parser API.
+  const signature = secp256k1.sign(hashMessage(signedText).slice(2), PUBLIC_TEST_SIGNER_KEY.slice(2));
+  const proof: Proof = { model_id: "mock/sample-parser", request_hash, response_hash, chat_id: `mock-${request_hash.slice(0, 20)}`, signature: `0x${signature.toCompactHex()}${(27 + signature.recovery).toString(16)}`, signing_address: account.address, signing_algo: "ecdsa", signature_kind: "mock", text: signedText, verified_ok: false, mock: true, attestation_nonce: "", verification_reason: "MOCK — not a TEE result" };
   return { result, proof };
 }

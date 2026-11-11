@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { privateKeyToAccount } from "viem/accounts";
+import { readFileSync } from "node:fs";
+import * as dcap from "@phala/dcap-qvl";
+import * as attestation from "../src/lib/attestation/verify-report";
+vi.mock("@phala/dcap-qvl", async importOriginal => ({ ...await importOriginal<typeof import("@phala/dcap-qvl")>(), getCollateral: vi.fn() }));
 import { fetchSignature, liveCompletion, hashBytes } from "../src/server/nearai/client";
 import { CHECK_IDS, formSchema, resultSchema } from "../src/server/nearai/prompt";
 import { minorUnits, recomputeLineItemSum, recomputeVerdict } from "../src/server/nearai/verdict";
@@ -10,11 +14,11 @@ import { verifyPublicSignature } from "../src/lib/verify-signature";
 const account = privateKeyToAccount("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
 const form = formSchema.parse({ buyer_label: "Gulf Foods Trading (sample)", face: "10000000", tenor_days: 60 });
 const text = "Seller: Sample Cashew Exports Ltd (sample) Buyer: Gulf Foods Trading (sample) Invoice: TW-0042 Issued: 2026-11-01 Due: 2026-12-31 Net 60 cashew kernels W320 2 x 3.00 = 6.00 cashew kernels W320 1 x 4.00 = 4.00 Total: 10.00 USDC";
-const expected = { model_id: "deepseek/deepseek-v3.2", request_hash: "a".repeat(64), response_hash: "b".repeat(64), chat_id: "chat-test" };
+const expected = { model_id: "z-ai/glm-5.3-flash", request_hash: "a".repeat(64), response_hash: "b".repeat(64), chat_id: "chat-test" };
 const signedText = `${expected.model_id}:${expected.request_hash}:${expected.response_hash}`;
 const reports = [{ signing_address: account.address, signing_algo: "ecdsa", request_nonce: "test" }];
 async function signature(overrides = {}) { return { text: signedText, signing_algo: "ecdsa", signature_kind: "provider_tee", signing_address: account.address, signature: await account.signMessage({ message: signedText }), ...overrides }; }
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); clearModelCache(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); vi.restoreAllMocks(); clearModelCache(); });
 describe("verdict", () => {
   it("all branches and every check failure", () => {
     const checks = CHECK_IDS.map(id => ({ id, ok: true, note: "" }));
@@ -87,48 +91,82 @@ describe("response signatures", () => {
   });
   it("live flow hashes exact bytes, canonical body and preflight nonce", async () => {
     vi.stubEnv("NEARAI_API_KEY", "test-only");
+    vi.stubEnv("NEARAI_MODEL_TEXT", expected.model_id); vi.stubEnv("NEARAI_E2EE", "0");
+    const fixture = (name: string) => readFileSync(new URL(`./fixtures/nearai/${name}`, import.meta.url), "utf8");
+    const report = JSON.parse(fixture("report-z-ai_glm-5.3-flash.json")).model_attestations[0];
+    const collateral = JSON.parse(fixture("collateral-glm.json"));
+    const nowSecs = Number(fixture("verify-now-secs.txt"));
+    const verified = await attestation.verifyModelAttestation(report, { nonce: report.request_nonce, collateral, nowSecs });
+    expect(verified.ok).toBe(true);
+    vi.useFakeTimers(); vi.setSystemTime(nowSecs * 1000);
+    const collateralStub = vi.mocked(dcap.getCollateral).mockResolvedValue(collateral);
+    // The live quote's private signer key is unavailable. Stub the verified-report boundary
+    // with the real fixture's result, substituting a local signer for response-signature coverage.
+    const verifierStub = vi.spyOn(attestation, "verifyModelAttestation").mockResolvedValue({ ...verified, signingAddress: account.address });
     const raw = ` {"id":"chat-exact", "choices":[{"message":{"content":${JSON.stringify(JSON.stringify(mockCompletion(form, text).result))}}}]}\n`;
     let requestHash = "", nonce = "";
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.endsWith("/model/list")) return Response.json({ data: [{ id: expected.model_id, metadata: { verifiable: true } }] });
-      if (url.includes("attestation/report")) { nonce = new URL(url).searchParams.get("nonce")!; return Response.json({ model_attestations: [{ ...reports[0], request_nonce: nonce }] }); }
+      if (url.endsWith("/models")) return Response.json({ data: [{ id: expected.model_id, owned_by: "nearai", is_ready: true }] });
+      if (url.includes("attestation/report")) { nonce = new URL(url).searchParams.get("nonce")!; return Response.json({ model_attestations: [{ ...report, ...reports[0], request_nonce: nonce, signing_public_key: account.publicKey.slice(4) }] }); }
       if (url.endsWith("chat/completions")) {
         expect(typeof init?.body).toBe("string");
         expect(init?.headers).toMatchObject({ "x-no-aliasing": "true", "Accept-Encoding": "identity" });
         expect(JSON.parse(init!.body as string)).toMatchObject({ model: expected.model_id, temperature: 0, stream: false });
+        const sent = JSON.parse(init!.body as string);
+        expect(init!.body).toBe(JSON.stringify(sent));
+        expect(sent.messages[0].role).toBe("system");
+        expect(sent.messages.at(-1)).toEqual({ role: "user", content: expect.stringContaining(`FORM_FIELDS\n${JSON.stringify(form)}\nINVOICE_TEXT\n${text}`) });
         requestHash = hashBytes(init!.body as string); return new Response(raw);
       }
+      if (!url.includes("/signature/")) throw new Error(`Unexpected fixture request: ${url}`);
       const payload = `${expected.model_id}:${requestHash}:${hashBytes(raw)}`;
       return Response.json({ ...await signature(), text: payload, signature: await account.signMessage({ message: payload }) });
     }));
     const result = await liveCompletion(form, text);
     expect(result.proof.verified_ok).toBe(true); expect(nonce).toMatch(/^[0-9a-f]{64}$/);
     expect(result.proof.response_hash).toBe(hashBytes(raw)); expect(result.proof.request_hash).toBe(requestHash);
+    expect(collateralStub).toHaveBeenCalledWith(expect.any(String), Uint8Array.from(Buffer.from(report.intel_quote, "hex")));
+    expect(verifierStub).toHaveBeenCalledWith(expect.objectContaining({ intel_quote: report.intel_quote, request_nonce: nonce, signing_address: account.address }), { nonce, collateral, nowSecs });
+    expect(result.proof.attestation_nonce).toBe(nonce);
+    expect(result.proof.attestation_summary?.steps).toEqual(verified.steps);
   });
 });
 describe("model catalog", () => {
-  it("requires explicit verifiable metadata, caches ten minutes", async () => {
-    const fetch = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ models: [{ modelId: expected.model_id, metadata: { verifiable: true } }, { modelId: "bad", metadata: { verifiable: false } }] })));
+  it("requires an attested owner and readiness, caches ten minutes without metadata", async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ data: [
+      { id: expected.model_id, owned_by: "nearai", is_ready: true },
+      { id: "Qwen/Qwen3-VL-30B-A3B-Instruct", owned_by: "attested 3p" },
+      { id: "deepseek/deepseek-v3.2", owned_by: "nearai", is_ready: false },
+      { id: "bad", owned_by: "untrusted", is_ready: true, metadata: { verifiable: true } },
+      { id: "openai/fixture", owned_by: "openai", is_ready: true },
+    ] })));
     vi.stubGlobal("fetch", fetch);
     await assertVerifiableModel(expected.model_id); await assertVerifiableModel(expected.model_id);
-    await expect(assertVerifiableModel("bad")).rejects.toThrow(); expect(fetch).toHaveBeenCalledTimes(1);
+    await assertVerifiableModel("Qwen/Qwen3-VL-30B-A3B-Instruct");
+    for (const id of ["bad", "deepseek/deepseek-v3.2", "openai/fixture"]) await expect(assertVerifiableModel(id)).rejects.toThrow("Model is not verifiable");
+    await vi.advanceTimersByTimeAsync(599_999); await assertVerifiableModel(expected.model_id);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
   it("fallback only permits canonical allowlist when catalog unavailable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    await expect(assertVerifiableModel(expected.model_id)).resolves.toBe(expected.model_id);
+    for (const id of [expected.model_id, "Qwen/Qwen3-VL-30B-A3B-Instruct", "moonshotai/kimi-k3"]) await expect(assertVerifiableModel(id)).resolves.toBe(id);
+    await expect(assertVerifiableModel("deepseek/deepseek-v3.2")).rejects.toThrow("Model is not verifiable");
     await expect(assertVerifiableModel("alias")).rejects.toThrow();
   });
   it("does not fallback over an explicit negative", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ data: [{ id: expected.model_id, metadata: { verifiable: false } }] })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ data: [{ id: expected.model_id, owned_by: "nearai", is_ready: false }] })));
     await expect(assertVerifiableModel(expected.model_id)).rejects.toThrow();
   });
   it("refreshes the catalog after ten minutes", async () => {
     vi.useFakeTimers();
-    const fetch = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ models: [{ modelId: expected.model_id, metadata: { verifiable: true } }] })));
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ data: [{ id: expected.model_id, owned_by: "nearai", is_ready: true }] }))
+      .mockResolvedValueOnce(Response.json({ data: [{ id: expected.model_id, owned_by: "nearai", is_ready: false }] }));
     vi.stubGlobal("fetch", fetch);
     await assertVerifiableModel(expected.model_id);
-    await vi.advanceTimersByTimeAsync(600_001);
-    await assertVerifiableModel(expected.model_id);
+    await vi.advanceTimersByTimeAsync(600_000);
+    await expect(assertVerifiableModel(expected.model_id)).rejects.toThrow("Model is not verifiable");
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

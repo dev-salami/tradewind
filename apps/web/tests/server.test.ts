@@ -111,10 +111,17 @@ describe("verification flow", () => {
     vi.stubEnv("NEAR_NETWORK", "testnet"); vi.stubEnv("ATTESTER_PRIVATE_KEY", "");
     await expect(recordVerification("test", result)).rejects.toThrow("attester key not configured");
   });
-  it("scanned pages fail clearly and always erase input PDF bytes", async () => {
-    const pdf = await PDFDocument.create(); pdf.addPage();
+  it("scanned pages cap a valid mock sidecar at warn and always erase input PDF bytes", async () => {
+    vi.stubEnv("AI_MODE", "mock"); vi.stubEnv("NEAR_NETWORK", "testnet");
+    const pdf = await PDFDocument.create(), page = pdf.addPage();
+    page.drawText("Seller: Sample Buyer: Buyer Invoice: TW-0042 Issued: 2026-11-01 Due: 2026-12-31 Net 60 W320 2 x 3.00 = 6.00 W320 1 x 4.00 = 4.00 Total: 10.00 USDC", { x: 10, y: 700, size: 4 });
+    pdf.addPage(); // A page without extractable text selects vision even when another page has text.
     const bytes = await pdf.save();
-    await expect(runVerification({ invoiceId: "test", pdfBytes: bytes, formFields: formSchema.parse({}) })).rejects.toThrow("scanned PDFs need the vision model");
+    const result = await runVerification({ invoiceId: "test", pdfBytes: bytes, formFields: formSchema.parse({ buyer_label: "Buyer", face: "10000000", tenor_days: 60 }) });
+    expect(result.scanned).toBe(true); expect(result.mock).toBe(true);
+    expect(result.verdict).toBe("warn");
+    expect(result.reasons).toContain("MOCK vision — scanned PDF not read");
+    expect(result.checks.filter(c => !c.ok)).toEqual([{ id: "no_obvious_tampering_signals", ok: false, note: "MOCK vision — scanned PDF not read" }]);
     expect(bytes.every(b => b === 0)).toBe(true);
   });
   it("legacy Node PDF extraction works for text PDFs", async () => {
