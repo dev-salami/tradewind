@@ -30,7 +30,10 @@ impl Contract {
     /// Public sandbox/testnet faucet. Never deploy this contract to mainnet.
     #[payable]
     pub fn mint(&mut self, account_id: AccountId, amount: U128) {
-        assert!(amount.0 > 0 && amount.0 <= MINT_CAP, "mint cap: 1,000 tUSDC");
+        assert!(
+            amount.0 > 0 && amount.0 <= MINT_CAP,
+            "mint cap: 1,000 tUSDC"
+        );
         // NEP-145 checks the minimum deposit for new accounts and refunds excess
         // (including all attached funds for an already registered receiver).
         self.token
@@ -81,7 +84,8 @@ impl FungibleTokenResolver for Contract {
         receiver_id: AccountId,
         amount: U128,
     ) -> U128 {
-        self.token.ft_resolve_transfer(sender_id, receiver_id, amount)
+        self.token
+            .ft_resolve_transfer(sender_id, receiver_id, amount)
     }
 }
 

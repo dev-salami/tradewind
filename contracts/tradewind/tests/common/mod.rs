@@ -1,12 +1,10 @@
+#![allow(unused_must_use, dead_code)]
 //! Shared by the sandbox tests and local demo; never connects to a public RPC.
 #![allow(dead_code)]
 
 use anyhow::{bail, ensure, Context, Result};
 use near_workspaces::{
-    network::Sandbox,
-    result::ExecutionFinalResult,
-    types::NearToken,
-    Account, Contract, Worker,
+    network::Sandbox, result::ExecutionFinalResult, types::NearToken, Account, Contract, Worker,
 };
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -264,7 +262,10 @@ impl Harness {
 
     pub async fn nft_owner(&self, id: &str) -> Result<String> {
         let token = self.view("nft_token", json!({"token_id": id})).await?;
-        Ok(token["owner_id"].as_str().context("missing NFT")?.to_string())
+        Ok(token["owner_id"]
+            .as_str()
+            .context("missing NFT")?
+            .to_string())
     }
 
     pub async fn create(
@@ -424,17 +425,22 @@ impl Harness {
 
     /// Sandbox blocks are approximately one second; use 2x the requested days
     /// plus 10 blocks, then explicitly verify the contract clock crossed it.
+    /// Fast-forwards until the invoice's contract day is past `day`.
+    /// Sandbox block time varies by machine, so loop instead of assuming 1 s/block.
     pub async fn advance_past_day(&self, id: &str, day: u64) -> Result<()> {
-        self.worker
-            .fast_forward(day.saturating_mul(2).saturating_add(10))
-            .await?;
-        let elapsed = self.view("now_contract_day", json!({"id": id})).await?;
-        let elapsed: u64 = elapsed.as_str().context("missing contract day")?.parse()?;
-        ensure!(
-            elapsed > day,
-            "sandbox clock advanced only {elapsed} days; expected > {day}"
-        );
-        Ok(())
+        let mut elapsed = 0u64;
+        for _ in 0..40 {
+            let remaining = day.saturating_sub(elapsed);
+            self.worker
+                .fast_forward(remaining.saturating_mul(2).saturating_add(10))
+                .await?;
+            let v = self.view("now_contract_day", json!({"id": id})).await?;
+            elapsed = v.as_str().context("missing contract day")?.parse()?;
+            if elapsed > day {
+                return Ok(());
+            }
+        }
+        anyhow::bail!("sandbox clock advanced only {elapsed} days; expected > {day}")
     }
 }
 

@@ -1,3 +1,5 @@
+// Helpers assert success before returning results.
+#![allow(unused_must_use)]
 //! Local sandbox only. Shared helpers keep this executable aligned with tests.
 #[path = "../tests/common/mod.rs"]
 mod common;
@@ -68,7 +70,10 @@ async fn main() -> Result<()> {
          → invoice NFT belongs to sample-cashew"
     );
     let preview = h.view("preview_advance", json!({"id": id})).await?;
-    ensure!(preview["eligible"] == true, "advance is ineligible: {preview}");
+    ensure!(
+        preview["eligible"] == true,
+        "advance is ineligible: {preview}"
+    );
     let advance = amount(&preview, "advance");
     let exporter_before = h.balance(&h.exporter).await?;
     let treasury_before = h.balance(&h.treasury).await?;
@@ -77,7 +82,10 @@ async fn main() -> Result<()> {
         h.balance(&h.exporter).await? == exporter_before + advance,
         "advance not paid"
     );
-    ensure!(h.nft_owner(id).await? == h.core.id().as_str(), "NFT not escrowed");
+    ensure!(
+        h.nft_owner(id).await? == h.core.id().as_str(),
+        "NFT not escrowed"
+    );
     println!(
         "[7] Exporter received {} USDC at {}%; NFT escrowed by core, status Funded",
         dollars(advance),
@@ -91,8 +99,14 @@ async fn main() -> Result<()> {
     let paid = &repaid["paid"];
     let treasury_delta = h.balance(&h.treasury).await? - treasury_before;
     let exporter_rest = h.balance(&h.exporter).await? - exporter_before - advance;
-    ensure!(treasury_delta == amount(paid, "to_protocol"), "treasury payout mismatch");
-    ensure!(exporter_rest == amount(paid, "to_exporter"), "exporter payout mismatch");
+    ensure!(
+        treasury_delta == amount(paid, "to_protocol"),
+        "treasury payout mismatch"
+    );
+    ensure!(
+        exporter_rest == amount(paid, "to_exporter"),
+        "exporter payout mismatch"
+    );
     println!(
         "[9] Buyer paid $4.00 → remaining principal {}, pool fee {}, treasury {}, exporter {} USDC",
         dollars(advance - 6 * USDC),
@@ -100,7 +114,10 @@ async fn main() -> Result<()> {
         dollars(treasury_delta),
         dollars(exporter_rest),
     );
-    ensure!(h.nft_owner(id).await? == h.exporter.id().as_str(), "NFT not returned");
+    ensure!(
+        h.nft_owner(id).await? == h.exporter.id().as_str(),
+        "NFT not returned"
+    );
     println!("[10] Invoice Repaid → NFT returned to sample-cashew");
     let record = h.record(&h.buyer).await?;
     let end_pool = h.pool().await?;
@@ -113,7 +130,14 @@ async fn main() -> Result<()> {
         price(amount(&end_pool, "share_price_e6")),
     );
     let lp_before = h.balance(&h.lp).await?;
-    h.call(&h.lp, &h.core, "redeem", json!({"shares": shares.to_string()}), 1).await?;
+    h.call(
+        &h.lp,
+        &h.core,
+        "redeem",
+        json!({"shares": shares.to_string()}),
+        1,
+    )
+    .await?;
     let redeemed = h.balance(&h.lp).await? - lp_before;
     println!(
         "[12] LP burned {} twPOOL and received {} USDC ({} base units, including earned fees)",
@@ -121,6 +145,8 @@ async fn main() -> Result<()> {
         dollars(redeemed),
         redeemed,
     );
-    println!("Local demo complete. Test faucet token only; nothing was deployed to a public network.");
+    println!(
+        "Local demo complete. Test faucet token only; nothing was deployed to a public network."
+    );
     Ok(())
 }

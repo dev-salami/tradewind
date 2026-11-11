@@ -1,3 +1,5 @@
+// Helpers in `common` assert success before returning results.
+#![allow(unused_must_use)]
 mod common;
 
 use anyhow::Result;
@@ -40,7 +42,10 @@ async fn happy_path_full_flow() -> Result<()> {
     assert_eq!(h.balance(&h.treasury).await?, before_treasury);
     assert_eq!(h.balance(&h.exporter).await?, before_exporter + 8_200_000);
     let result = h.repay(&h.buyer, id, 4 * USDC, "partial-2").await?;
-    assert!(result.logs().iter().any(|log| log.contains("\"outcome\":\"on_time\"")));
+    assert!(result
+        .logs()
+        .iter()
+        .any(|log| log.contains("\"outcome\":\"on_time\"")));
     let repaid = h.invoice(id).await?;
     assert_eq!(repaid["status"], "Repaid");
     assert_eq!(amount(&repaid["paid"], "to_pool_principal"), 8_200_000);
@@ -77,12 +82,14 @@ async fn default_path() -> Result<()> {
     h.repay(&h.buyer2, id, USDC, "before-default").await?;
     let unpaid = 6 * USDC;
     h.advance_past_day(id, 3).await?;
-    h.call(&h.keeper, &h.core, "mark_overdue", json!({"id": id}), 0).await?;
+    h.call(&h.keeper, &h.core, "mark_overdue", json!({"id": id}), 0)
+        .await?;
     assert_eq!(h.invoice(id).await?["overdue"], true);
     let config = h.view("get_config", json!({})).await?;
     let deadline_day = 3 + config["default_after_days"].as_u64().unwrap();
     h.advance_past_day(id, deadline_day).await?;
-    h.call(&h.keeper, &h.core, "mark_default", json!({"id": id}), 0).await?;
+    h.call(&h.keeper, &h.core, "mark_default", json!({"id": id}), 0)
+        .await?;
     let defaulted = h.pool().await?;
     assert_eq!(h.invoice(id).await?["status"], "Defaulted");
     assert_eq!(amount(&defaulted, "written_off"), unpaid);
@@ -95,7 +102,10 @@ async fn default_path() -> Result<()> {
     assert_eq!(preview["eligible"], false);
     assert_eq!(preview["reason"], "buyer not eligible");
     let result = h.repay(&h.buyer2, id, 9 * USDC, "after-default").await?;
-    assert!(result.logs().iter().any(|log| log.contains("\"outcome\":\"after_default\"")));
+    assert!(result
+        .logs()
+        .iter()
+        .any(|log| log.contains("\"outcome\":\"after_default\"")));
     let recovered = h.pool().await?;
     assert_eq!(amount(&recovered, "written_off"), 0);
     assert_eq!(amount(&recovered, "idle"), 20_075_000);
@@ -107,7 +117,14 @@ async fn default_path() -> Result<()> {
     assert_eq!(record["recovered"], 1);
     assert_eq!(record["score"], -15);
     assert_eq!(record["frozen"], true);
-    h.call(&h.owner, &h.core, "unfreeze_buyer", json!({"account_id": h.buyer2.id()}), 1).await?;
+    h.call(
+        &h.owner,
+        &h.core,
+        "unfreeze_buyer",
+        json!({"account_id": h.buyer2.id()}),
+        1,
+    )
+    .await?;
     assert_eq!(h.record(&h.buyer2).await?["frozen"], false);
     Ok(())
 }
@@ -120,7 +137,10 @@ async fn unattributed_and_overpaid() -> Result<()> {
     h.transfer(&h.buyer, USDC, "not-json".into()).await?;
     h.repay(&h.buyer, "TW-UNKNOWN", 2 * USDC, "unknown").await?;
     assert_eq!(h.balance(&h.buyer).await?, sender_before - 3 * USDC);
-    assert_eq!(h.token_balance(&h.usdc, h.core.id().as_str()).await?, core_before + 3 * USDC);
+    assert_eq!(
+        h.token_balance(&h.usdc, h.core.id().as_str()).await?,
+        core_before + 3 * USDC
+    );
     let entries = h.view("list_unattributed", json!({})).await?;
     assert_eq!(entries.as_array().unwrap().len(), 2);
     assert_eq!(entries[0]["msg"], "not-json");
@@ -129,14 +149,28 @@ async fn unattributed_and_overpaid() -> Result<()> {
     for (index, entry) in entries.as_array().unwrap().iter().enumerate() {
         assert_eq!(entry["resolved"], false);
         assert_eq!(entry["sender"], h.buyer.id().as_str());
-        h.call(&h.owner, &h.core, "refund_unattributed", json!({
-            "index": index.to_string(), "to": h.buyer.id(),
-        }), 1).await?;
+        h.call(
+            &h.owner,
+            &h.core,
+            "refund_unattributed",
+            json!({
+                "index": index.to_string(), "to": h.buyer.id(),
+            }),
+            1,
+        )
+        .await?;
     }
     assert_eq!(h.balance(&h.buyer).await?, sender_before);
-    assert_eq!(h.token_balance(&h.usdc, h.core.id().as_str()).await?, core_before);
+    assert_eq!(
+        h.token_balance(&h.usdc, h.core.id().as_str()).await?,
+        core_before
+    );
     let entries = h.view("list_unattributed", json!({})).await?;
-    assert!(entries.as_array().unwrap().iter().all(|entry| entry["resolved"] == true));
+    assert!(entries
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|entry| entry["resolved"] == true));
     let invoice = h.accepted(&h.exporter, &h.buyer, 10 * USDC, 60).await?;
     let id = invoice["id"].as_str().unwrap();
     h.advance(&h.exporter, &invoice, 7 * USDC).await?;
@@ -145,16 +179,34 @@ async fn unattributed_and_overpaid() -> Result<()> {
     assert_eq!(amount(&h.invoice(id).await?["paid"], "overpaid"), 2 * USDC);
     let pool = h.pool().await?;
     assert_eq!(amount(&pool, "total_assets"), 20_150_000);
-    assert_eq!(h.token_balance(&h.usdc, h.core.id().as_str()).await?, 22_150_000);
-    h.call(&h.owner, &h.core, "refund_overpaid", json!({
-        "id": id, "to": h.buyer.id(), "amount": (2 * USDC).to_string(),
-    }), 1).await?;
+    assert_eq!(
+        h.token_balance(&h.usdc, h.core.id().as_str()).await?,
+        22_150_000
+    );
+    h.call(
+        &h.owner,
+        &h.core,
+        "refund_overpaid",
+        json!({
+            "id": id, "to": h.buyer.id(), "amount": (2 * USDC).to_string(),
+        }),
+        1,
+    )
+    .await?;
     assert_eq!(h.balance(&h.buyer).await?, sender_before - 10 * USDC);
     assert_eq!(amount(&h.invoice(id).await?, "overpaid_refunded"), 2 * USDC);
     assert_eq!(h.pool().await?, pool);
-    let duplicate = h.transact(&h.owner, &h.core, "refund_overpaid", json!({
-        "id": id, "to": h.buyer.id(), "amount": "1",
-    }), 1).await?;
+    let duplicate = h
+        .transact(
+            &h.owner,
+            &h.core,
+            "refund_overpaid",
+            json!({
+                "id": id, "to": h.buyer.id(), "amount": "1",
+            }),
+            1,
+        )
+        .await?;
     assert_failure(&duplicate, "exceeds overpaid");
     Ok(())
 }
@@ -164,23 +216,36 @@ async fn lp_allowlist_and_redeem() -> Result<()> {
     let h = Harness::new().await?;
     let bot_before = h.balance(&h.bot).await?;
     let pool_before = h.pool().await?;
-    h.transfer(&h.bot, 5 * USDC, json!({"action": "deposit"}).to_string()).await?;
+    h.transfer(&h.bot, 5 * USDC, json!({"action": "deposit"}).to_string())
+        .await?;
     assert_eq!(h.balance(&h.bot).await?, bot_before);
     assert_eq!(h.pool().await?, pool_before);
     assert_eq!(h.token_balance(&h.core, h.bot.id().as_str()).await?, 0);
     let metadata: serde_json::Value = h.core.view("ft_metadata").await?.json()?;
     assert_eq!(metadata["symbol"], "twPOOL");
     assert_eq!(metadata["decimals"], 6);
-    assert_eq!(h.token_balance(&h.core, h.lp.id().as_str()).await?, 20 * USDC);
+    assert_eq!(
+        h.token_balance(&h.core, h.lp.id().as_str()).await?,
+        20 * USDC
+    );
     let invoice = h.accepted(&h.exporter, &h.buyer, 10 * USDC, 60).await?;
     h.advance(&h.exporter, &invoice, 7 * USDC).await?;
-    let failed = h.transact(&h.lp, &h.core, "redeem", json!({"shares": "20000000"}), 1).await?;
+    let failed = h
+        .transact(&h.lp, &h.core, "redeem", json!({"shares": "20000000"}), 1)
+        .await?;
     assert_failure(&failed, "liquidity in advances");
-    assert_eq!(h.token_balance(&h.core, h.lp.id().as_str()).await?, 20 * USDC);
+    assert_eq!(
+        h.token_balance(&h.core, h.lp.id().as_str()).await?,
+        20 * USDC
+    );
     let before = h.balance(&h.lp).await?;
-    h.call(&h.lp, &h.core, "redeem", json!({"shares": "5000000"}), 1).await?;
+    h.call(&h.lp, &h.core, "redeem", json!({"shares": "5000000"}), 1)
+        .await?;
     assert_eq!(h.balance(&h.lp).await?, before + 5 * USDC);
-    assert_eq!(h.token_balance(&h.core, h.lp.id().as_str()).await?, 15 * USDC);
+    assert_eq!(
+        h.token_balance(&h.core, h.lp.id().as_str()).await?,
+        15 * USDC
+    );
     let pool = h.pool().await?;
     assert_eq!(amount(&pool, "total_shares"), 15 * USDC);
     assert_eq!(amount(&pool, "idle"), 8 * USDC);
@@ -191,10 +256,20 @@ async fn lp_allowlist_and_redeem() -> Result<()> {
 #[tokio::test]
 async fn advance_revert_when_exporter_unregistered() -> Result<()> {
     let h = Harness::new().await?;
-    let exporter2 = h.worker.root_account()?.create_subaccount("exporter2")
-        .initial_balance(NearToken::from_near(10)).transact().await?.into_result()?;
-    let registration: serde_json::Value = h.usdc.view("storage_balance_of")
-        .args_json(json!({"account_id": exporter2.id()})).await?.json()?;
+    let exporter2 = h
+        .worker
+        .root_account()?
+        .create_subaccount("exporter2")
+        .initial_balance(NearToken::from_near(10))
+        .transact()
+        .await?
+        .into_result()?;
+    let registration: serde_json::Value = h
+        .usdc
+        .view("storage_balance_of")
+        .args_json(json!({"account_id": exporter2.id()}))
+        .await?
+        .json()?;
     assert!(registration.is_null());
     let invoice = h.accepted(&exporter2, &h.buyer, 10 * USDC, 60).await?;
     let id = invoice["id"].as_str().unwrap();
@@ -212,7 +287,10 @@ async fn advance_revert_when_exporter_unregistered() -> Result<()> {
         .await?;
     assert!(result.is_success(), "callback must succeed: {result:#?}");
     assert!(!result.receipt_failures().is_empty());
-    assert!(result.logs().iter().any(|log| log.contains("advance_reverted")));
+    assert!(result
+        .logs()
+        .iter()
+        .any(|log| log.contains("advance_reverted")));
     assert!(!result.json::<bool>()?);
     let reverted = h.invoice(id).await?;
     assert_eq!(reverted["status"], "Accepted");
@@ -233,14 +311,30 @@ async fn pause() -> Result<()> {
     let verified = h.create(&h.exporter, &h.buyer2, USDC, 365).await?;
     h.verify(&verified).await?;
     h.call(&h.owner, &h.core, "pause", json!({}), 1).await?;
-    let failed_create = h.transact(&h.exporter, &h.core, "create_invoice", json!({
-        "buyer": h.buyer.id(), "buyer_label": "gulf-foods", "invoice_number": "PAUSED",
-        "face": "1000000", "tenor_days": 60, "doc_hash": "ab".repeat(32),
-    }), NearToken::from_near(1).as_yoctonear()).await?;
+    let failed_create = h
+        .transact(
+            &h.exporter,
+            &h.core,
+            "create_invoice",
+            json!({
+                "buyer": h.buyer.id(), "buyer_label": "gulf-foods", "invoice_number": "PAUSED",
+                "face": "1000000", "tenor_days": 60, "doc_hash": "ab".repeat(32),
+            }),
+            NearToken::from_near(1).as_yoctonear(),
+        )
+        .await?;
     assert_failure(&failed_create, "paused");
-    let failed_accept = h.transact(&h.buyer2, &h.core, "accept_invoice", json!({
-        "id": verified["id"], "terms_hash": verified["terms_hash"],
-    }), 1).await?;
+    let failed_accept = h
+        .transact(
+            &h.buyer2,
+            &h.core,
+            "accept_invoice",
+            json!({
+                "id": verified["id"], "terms_hash": verified["terms_hash"],
+            }),
+            1,
+        )
+        .await?;
     assert_failure(&failed_accept, "paused");
     let failed_advance = h
         .transact(
@@ -254,17 +348,20 @@ async fn pause() -> Result<()> {
     assert_failure(&failed_advance, "paused");
     let balance = h.balance(&h.lp).await?;
     let pool = h.pool().await?;
-    h.transfer(&h.lp, USDC, json!({"action": "deposit"}).to_string()).await?;
+    h.transfer(&h.lp, USDC, json!({"action": "deposit"}).to_string())
+        .await?;
     assert_eq!(h.balance(&h.lp).await?, balance);
     assert_eq!(h.pool().await?, pool);
     let id = funded["id"].as_str().unwrap();
     h.repay(&h.buyer, id, USDC, "paused-repayment").await?;
     assert_eq!(amount(&h.invoice(id).await?["paid"], "total"), USDC);
     h.advance_past_day(id, 60).await?;
-    h.call(&h.keeper, &h.core, "mark_overdue", json!({"id": id}), 0).await?;
+    h.call(&h.keeper, &h.core, "mark_overdue", json!({"id": id}), 0)
+        .await?;
     assert_eq!(h.invoice(id).await?["overdue"], true);
     h.advance_past_day(id, 90).await?;
-    h.call(&h.keeper, &h.core, "mark_default", json!({"id": id}), 0).await?;
+    h.call(&h.keeper, &h.core, "mark_default", json!({"id": id}), 0)
+        .await?;
     assert_eq!(h.invoice(id).await?["status"], "Defaulted");
     h.repay(&h.buyer, id, 9 * USDC, "paused-recovery").await?;
     assert_eq!(h.invoice(id).await?["status"], "Repaid");
@@ -276,8 +373,19 @@ async fn pause() -> Result<()> {
 async fn approver_bot() -> Result<()> {
     let h = Harness::new().await?;
     let invoice = h.accepted(&h.exporter, &h.buyer, 10 * USDC, 60).await?;
-    h.call(&h.exporter, &h.core, "set_approver", json!({"approver": h.bot.id()}), 1).await?;
-    assert_eq!(h.view("get_approver", json!({"exporter": h.exporter.id()})).await?, h.bot.id().as_str());
+    h.call(
+        &h.exporter,
+        &h.core,
+        "set_approver",
+        json!({"approver": h.bot.id()}),
+        1,
+    )
+    .await?;
+    assert_eq!(
+        h.view("get_approver", json!({"exporter": h.exporter.id()}))
+            .await?,
+        h.bot.id().as_str()
+    );
     let rejected = h
         .transact(
             &h.keeper,
@@ -293,6 +401,9 @@ async fn approver_bot() -> Result<()> {
     h.advance(&h.bot, &invoice, 7 * USDC).await?;
     assert_eq!(h.balance(&h.exporter).await?, exporter_balance + 7 * USDC);
     assert_eq!(h.balance(&h.bot).await?, bot_balance);
-    assert_eq!(h.invoice(invoice["id"].as_str().unwrap()).await?["status"], "Funded");
+    assert_eq!(
+        h.invoice(invoice["id"].as_str().unwrap()).await?["status"],
+        "Funded"
+    );
     Ok(())
 }
