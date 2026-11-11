@@ -96,6 +96,16 @@ describe("guided UI", () => {
     expect(screen.getByRole("button", { name: /Buyer accepts/ })).toBeDisabled();
     expect(resumeGuided(sessionStorage)).toMatchObject({ invoice_id: "TW-9876", paused: true });
   });
+  it("renders sandbox hashes without explorer links and pauses partial failures", async () => {
+    vi.stubEnv("NEXT_PUBLIC_NEAR_NETWORK", "sandbox");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => url.endsWith("status") ? Response.json({ available: true }) : Response.json({ error: "Verification unavailable", tx_hashes: ["sandbox-created-hash"], tx_links: [] }, { status: 503 })));
+    render(<GuidedMode />);
+    fireEvent.click(await screen.findByRole("button", { name: /Create sample invoice/ }));
+    expect(await screen.findByText("sandbox-created-hash")).toBeInTheDocument();
+    expect(screen.getByText("local sandbox · no explorer")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View on NearBlocks ↗" })).toBeNull();
+    expect(resumeGuided(sessionStorage)).toMatchObject({ paused: true, results: [{ tx_hashes: ["sandbox-created-hash"], tx_links: [] }] });
+  });
   it("disables writes while busy, sends exact face units and pauses after a lost response", async () => {
     let rejectWrite: (reason: Error) => void = () => { throw new Error("No pending write"); };
     const fetchMock = vi.fn().mockImplementation((url: string) => url.endsWith("status") ? Promise.resolve(Response.json({ available: true })) : new Promise<Response>((_resolve, reject) => { rejectWrite = reject; }));

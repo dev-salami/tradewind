@@ -10,7 +10,7 @@ export function mockCompletion(form: FormFields, text: string, shipping?: string
   const items = [...text.matchAll(/W320\s+(\d+(?:\.\d+)?)\s+x\s+([\d.]+)\s*=\s*([\d.]+)/gi)];
   const buyer = find(/Buyer:\s*(.*?)\s*(?:Invoice:|TW-)/i);
   const tenor = Number(find(/Net\s+(\d+)/i));
-  const result: ModelResult = { verdict: "fail", extracted: { invoice_number: find(/(TW-\d+)/), issue_date: find(/Issued:\s*(\d{4}-\d{2}-\d{2})/), due_date: find(/Due:\s*(\d{4}-\d{2}-\d{2})/), payment_terms_days: tenor, seller_name: find(/Seller:\s*(.*?)\s*Buyer:/i), buyer_name: buyer, currency: /USDC/.test(text) ? "USDC" : "", subtotal: total, tax: "0", total,
+  const result: ModelResult = { verdict: "fail", extracted: { invoice_number: find(/Invoice:\s*((?:TW-\d+|G-[a-f0-9]{8}-\d+))/i), issue_date: find(/Issued:\s*(\d{4}-\d{2}-\d{2})/), due_date: find(/Due:\s*(\d{4}-\d{2}-\d{2})/), payment_terms_days: tenor, seller_name: find(/Seller:\s*(.*?)\s*Buyer:/i), buyer_name: buyer, currency: /USDC/.test(text) ? "USDC" : "", subtotal: total, tax: "0", total,
     line_items: items.map(i => ({ description: "cashew kernels W320", qty: i[1], unit_price: i[2], amount: i[3] })), goods: "cashew kernels W320", incoterm: "", ports: { loading: "", discharge: "" } },
     checks: CHECK_IDS.map(id => ({ id, ok: false, note: "MOCK fixture check" })), reasons: ["MOCK — not a TEE result"] };
   for (const c of result.checks) {
