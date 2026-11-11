@@ -6,6 +6,7 @@ import { Avatar, Card, Kpi, Pill } from "@/components/surfaces";
 import { InvoiceTable } from "@/components/invoice-table";
 import { NotificationsDrawer } from "@/components/notifications-drawer";
 import { ExporterDashboard } from "@/components/exporter-dashboard";
+import { ExportLinks } from "@/components/export-links";
 export default async function Dashboard() {
   if (!isFixtureMode()) return <ExporterDashboard />;
   const source = data();
@@ -15,6 +16,7 @@ export default async function Dashboard() {
   const advanced = invoices.reduce((sum, i) => sum + BigInt(i.advance?.amount ?? "0"), 0n);
   return <div className="tw-stack"><header className="tw-page-head"><div><p className="tw-eyebrow">Exporter</p><h1>{isFixtureMode() ? SAMPLE_EXPORTER_LABEL : "Public invoice overview"}</h1><p className="tw-muted">Your trade, moving forward.</p></div><Avatar name={SAMPLE_EXPORTER_LABEL} size={48} /></header>
     <div className="tw-toolbar"><Pill value="Telegram not linked" /><Link href="/app/new" className="tw-button"><Plus size={16} />New invoice</Link></div>
+    <ExportLinks accountId={SAMPLE_EXPORTER} />
     <div className="tw-kpis tw-kpis-3"><Kpi icon={<ArrowDownLeft size={19} />} value={<span className="tw-amber">{formatUsd(due)}</span>} label="Cash due · invoice balances" /><Kpi icon={<Wallet size={19} />} value="—" label="Cash on hand · connect wallet" /><Kpi icon={<TrendingUp size={19} />} value={formatUsd(advanced)} label="Advanced to date" /></div>
     <NotificationsDrawer />
     <InvoiceTable invoices={invoices} now={nowNs()} secondsPerDay={config.seconds_per_day} />
