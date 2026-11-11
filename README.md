@@ -18,7 +18,7 @@ Spec: [`docs/SPEC.md`](docs/SPEC.md) · Build status: [`docs/CHECKLIST.md`](docs
 
 ## Quick start for judges — "do X → see Y"
 
-Prerequisites: Node 22+, Rust stable with `wasm32-unknown-unknown`, [`cargo-near`](https://github.com/near/cargo-near), `make`. On Linux you also need OpenSSL headers (`libssl-dev`) and `pkg-config`; without `pkg-config`, export `OPENSSL_LIB_DIR` / `OPENSSL_INCLUDE_DIR`.
+Prerequisites: Node 22+ (uses built-in `node:sqlite`), **Rust ≥ 1.95** (tested on 1.99; older toolchains fail on current `serde_with`/near-sdk deps — `rustup update stable`) with `wasm32-unknown-unknown`, [`cargo-near`](https://github.com/near/cargo-near), `make`. On Linux you also need OpenSSL headers (`libssl-dev`) and `pkg-config`; without `pkg-config`, export `OPENSSL_LIB_DIR` / `OPENSSL_INCLUDE_DIR`.
 
 | Do | See |
 | --- | --- |

@@ -2,7 +2,7 @@
 
 > Repo copy of the internal spec. Role names are generic: **Dev** = code, deploys, infra; **PM** = spec, README, video, copy; **the owner** = project owner who approves spends, publication and submission.
 
-**Status:** DRAFT for review. No code is written until this is signed off.
+**Status:** Implemented — see [`CHECKLIST.md`](CHECKLIST.md) for per-feature build status. Decisions D1–D16 use the defaults below as editable config until the owner signs them off.
 **Prepared:** Wed 11 Nov 2026, 6:10 PM WAT.
 **Supersedes:** `receivable-rail-plan.md` (kept for history).
 **Deadline:** repo public with LICENSE and submission sent by **Sun 15 Nov 2026, 00:59 WAT** (2026-11-14T23:59Z). Internal target: **submit by Sat 14 Nov, 22:00 WAT**.
