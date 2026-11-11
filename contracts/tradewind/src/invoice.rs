@@ -31,6 +31,8 @@ pub struct Verification {
     pub chat_id: String,
     #[serde(default)]
     pub at: U64,
+    #[serde(default)]
+    pub signature_checked_on_chain: bool,
 }
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Debug)]
@@ -237,6 +239,11 @@ impl Contract {
             v.signing_address.chars().count() <= 200 && v.signing_algo.chars().count() <= 32,
             "verification too long"
         );
+        v.signature_checked_on_chain = false;
+        if self.config.require_tee_signature {
+            self.check_tee_signature(&v);
+            v.signature_checked_on_chain = true;
+        }
         let passed = v.verdict == "pass";
         v.at = U64(env::block_timestamp());
         i.verification = Some(v);
@@ -256,18 +263,40 @@ impl Contract {
         );
     }
 
+    #[payable]
     pub fn cancel_invoice(&mut self, id: String) {
         let mut i = self.invoice(&id);
-        assert_eq!(env::predecessor_account_id(), i.exporter, "exporter only");
+        let owner = env::predecessor_account_id() == self.owner;
+        if owner {
+            self.assert_owner();
+        } else {
+            assert_eq!(
+                env::predecessor_account_id(), i.exporter,
+                "exporter or owner only"
+            );
+            assert_ne!(i.status, InvoiceStatus::Accepted, "invoice already accepted");
+            assert_eq!(
+                env::attached_deposit().as_yoctonear(), 0,
+                "no deposit required"
+            );
+        }
         assert!(
             matches!(
                 i.status,
-                InvoiceStatus::Created | InvoiceStatus::Verified | InvoiceStatus::Rejected
+                InvoiceStatus::Created
+                    | InvoiceStatus::Verified
+                    | InvoiceStatus::Rejected
+                    | InvoiceStatus::Accepted
             ),
             "invalid status"
         );
+        assert!(i.advance.is_none(), "invoice has an advance");
+        self.burn_invoice_nft(&id);
         i.status = InvoiceStatus::Cancelled;
         self.invoices.insert(&id, &i);
+        if owner {
+            emit("admin_action", json!({"action":"cancel_invoice","invoice_id":id}));
+        }
         emit("invoice_cancelled", json!({"invoice_id":id}));
     }
 

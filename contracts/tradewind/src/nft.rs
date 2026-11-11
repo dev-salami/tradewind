@@ -1,12 +1,37 @@
 use crate::*;
 use near_contract_standards::non_fungible_token::{
-    events::NftTransfer,
+    events::{NftBurn, NftTransfer},
     metadata::{NFTContractMetadata, TokenMetadata},
     NonFungibleTokenEnumeration, Token,
 };
 use near_sdk::serde_json::json;
 
 impl Contract {
+    pub(crate) fn burn_invoice_nft(&mut self, id: &str) {
+        let token_id = id.to_string();
+        let Some(owner_id) = self.nft.owner_by_id.get(&token_id) else {
+            return;
+        };
+        // Metadata/approvals are disabled at initialization; only ownership and
+        // owner enumeration need removal. owner_by_id also drives total supply.
+        self.nft.owner_by_id.remove(&token_id);
+        if let Some(by_owner) = &mut self.nft.tokens_per_owner {
+            let mut tokens = by_owner.get(&owner_id).expect("NFT enumeration invariant");
+            tokens.remove(&token_id);
+            if tokens.is_empty() {
+                by_owner.remove(&owner_id);
+            } else {
+                by_owner.insert(&owner_id, &tokens);
+            }
+        }
+        NftBurn {
+            owner_id: &owner_id,
+            token_ids: &[id],
+            authorized_id: None,
+            memo: Some("invoice cancelled"),
+        }
+        .emit();
+    }
     pub(crate) fn move_nft(&mut self, id: &str, from: &AccountId, to: &AccountId) {
         if from == to {
             return;
@@ -39,8 +64,9 @@ impl Contract {
             .as_ref()
             .map(|v| json!({"model_id":v.model_id,"signature":v.signature}));
         let metadata=TokenMetadata {
-            title:Some(format!("Invoice {}",i.id)),
+            title:Some(format!("Tradewind invoice {}",i.id)),
             description:Some(format!("Tradewind invoice · {}",i.buyer_label)),
+            media:Some(crate::visual::invoice_media(&i)),
             extra:Some(json!({"face":i.face,"due_at":i.due_at,"buyer":i.buyer,"doc_hash":i.doc_hash,"status":i.status,"verification":verification}).to_string()),
             copies:Some(1), ..TokenMetadata::default()
         };
@@ -56,7 +82,7 @@ impl Contract {
             spec: "nft-2.0.0".into(),
             name: "Tradewind Invoices".into(),
             symbol: "TWINV".into(),
-            icon: None,
+            icon: Some(crate::visual::icon()),
             base_uri: None,
             reference: None,
             reference_hash: None,

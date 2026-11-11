@@ -34,6 +34,9 @@ pub struct Config {
     pub max_single_advance_bps: u32,
     pub invoice_counter_start: u64,
     pub paused: bool,
+    /// Mainnet should enable this after allowlisting the trusted TEE signing addresses.
+    #[serde(default)]
+    pub require_tee_signature: bool,
 }
 
 impl Config {
@@ -64,6 +67,7 @@ impl Config {
             max_single_advance_bps: 5000,
             invoice_counter_start: 35,
             paused: false,
+            require_tee_signature: false,
         }
     }
 
