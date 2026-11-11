@@ -1,4 +1,4 @@
-import { linkPost, devIdentity, validAccount } from "@/server/telegram/link";
+import { linkPost, linkIdentity, validAccount } from "@/server/telegram/link";
 import { telegramStore } from "@/server/telegram/store";
 export const runtime = "nodejs";
 export const POST = linkPost;
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 }
 export async function DELETE(request: Request) {
   const body = await request.json();
-  if (!devIdentity(request, body.account_id)) return Response.json({ error: "Wallet authentication required" }, { status: 401 });
+  if (!linkIdentity(request, body.account_id)) return Response.json({ error: "Wallet authentication required" }, { status: 401 });
   const s = telegramStore();
   s.transaction(() => {
     const link = s.link(body.account_id, body.role || "exporter");

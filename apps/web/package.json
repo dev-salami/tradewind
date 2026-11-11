@@ -2,6 +2,7 @@
   "name": "@tradewind/web", "version": "0.1.0", "private": true, "type": "module",
   "scripts": { "dev": "next dev", "build": "next build", "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "eslint ." },
   "dependencies": {
+    "@noble/curves": "1.8.1", "@scure/base": "1.2.6", "buffer": "6.0.3",
     "@tradewind/core": "*", "next": "^16.0.1", "react": "^19.2.0", "react-dom": "^19.2.0", "lucide-react": "^0.468.0",
     "zod": "^3.24.0", "viem": "^2.38.0", "near-api-js": "^5.1.1", "pdfjs-dist": "^4.10.38", "pdf-lib": "^1.17.1", "server-only": "^0.0.1", "grammy": "^1.38.3", "qrcode": "^1.5.4"
   },
