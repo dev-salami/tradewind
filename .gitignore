@@ -13,3 +13,5 @@ coverage/
 !res/*.wasm
 .turbo/
 *.tsbuildinfo
+data/
+apps/web/fixtures/*.pdf
