@@ -48,10 +48,16 @@ export async function Timeline({ invoice, txs = [] }: { invoice: Invoice; txs?: 
     { name: "Accepted", at: invoice.accepted_at, hash: hashFor("accept") }, { name: "Funded", at: invoice.advance?.at, hash: hashFor("advance") },
     ...invoice.payments.map((p, index) => ({ name: `Paid part ${index + 1}`, at: p.at, hash: repayments[index]?.tx_hash })),
     { name: "Repaid", at: invoice.status === "Repaid" ? invoice.payments.at(-1)?.at : null, hash: invoice.status === "Repaid" ? repayments[invoice.payments.length - 1]?.tx_hash : undefined },
-  ];
+  ] as { name: string; at?: string | null; hash?: string; note?: string }[];
+  // Keeper steps have no timestamp in the invoice view; show them only once they happened.
+  const keeperHash = (method: string) => known.find(tx => tx.method === method)?.tx_hash;
+  const defaulted = invoice.status === "Defaulted";
+  if (invoice.overdue || defaulted) steps.splice(steps.length - 1, invoice.status === "Repaid" ? 0 : 1,
+    { name: "Overdue", note: "Marked overdue by keeper", hash: keeperHash("mark_overdue") },
+    ...(defaulted ? [{ name: "Defaulted", note: "Written off by keeper · buyer frozen", hash: keeperHash("mark_default") }] : []));
   return <Card title="On-chain timeline"><ol className="tw-timeline">{steps.map(step => {
     const url = step.hash ? explorerTx(network(), step.hash) : null;
-    return <li key={step.name} className={step.at ? "tw-complete" : ""}><span className="tw-timeline-dot" /><div><strong>{step.name}</strong><p className="tw-muted">{step.at ? formatNs(step.at, { originNs: invoice.accepted_at ?? invoice.created_at, secondsPerDay: config.seconds_per_day }) : "Not yet recorded"}</p><small>{url ? <a className="tw-text-link" href={url} target="_blank" rel="noreferrer">View tx ↗</a> : step.at ? "Transaction link unavailable" : "Transaction link pending"}</small></div></li>;
+    return <li key={step.name} className={step.at || step.note ? "tw-complete" : ""}><span className="tw-timeline-dot" /><div><strong>{step.name}</strong><p className="tw-muted">{step.at ? formatNs(step.at, { originNs: invoice.accepted_at ?? invoice.created_at, secondsPerDay: config.seconds_per_day }) : step.note ?? "Not yet recorded"}</p><small>{url ? <a className="tw-text-link" href={url} target="_blank" rel="noreferrer">View tx ↗</a> : step.at || step.note ? "Transaction link unavailable" : "Transaction link pending"}</small></div></li>;
   })}</ol></Card>;
 }
 export function PaymentList({ invoice, txs = [] }: { invoice: Invoice; txs?: readonly ReceiptTx[] }) {

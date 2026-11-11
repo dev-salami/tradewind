@@ -29,6 +29,7 @@ Prerequisites: Node 22+, Rust stable with `wasm32-unknown-unknown`, [`cargo-near
 | Click **Verify** on a receipt's AI document check | The proof panel. Sample proofs are labelled "Fixture — not a TEE result". Live proofs are checked in the browser (EIP-191 signer vs. the attested model key). |
 | Set `NEXT_PUBLIC_DATA_SOURCE=rpc` plus the testnet contract ids in `.env` | The same screens reading live contract views over NEAR RPC, with wallet-signed actions (MyNearWallet / Meteor / HOT). |
 | Set `GUIDED_ENABLED=1` plus disposable **testnet** demo keys, open `/app/guided` | "Play both sides" guided mode: the server signs as the sample exporter and buyer so you can run the loop without wallets. It is refused on mainnet. See [`docs/GUIDED_MODE.md`](docs/GUIDED_MODE.md). |
+| Follow [`docs/E2E_SANDBOX.md`](docs/E2E_SANDBOX.md) | The real web app + worker against contracts on a **local** near-sandbox: guided invoice → accept → advance → part + final payment → waterfall; a 1-day invoice goes overdue → default → write-off → buyer frozen. |
 | `scripts/testnet/*` (dry-run by default) | Prints the exact testnet deploy and seed commands it would run. See [`docs/DEPLOY.md`](docs/DEPLOY.md). |
 
 No secrets are needed for any of the above. Without a NEAR AI key the app runs in explicitly labelled **mock** AI mode, which is refused on mainnet. Without a Telegram bot token, notifications stay in the in-app drawer.

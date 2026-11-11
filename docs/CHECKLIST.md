@@ -6,6 +6,8 @@ Network rule for this build: **testnet / local sandbox only**. Mainnet items sta
 
 ## P0 — must ship
 
+End-to-end check on a local near-sandbox (real web app + worker + contracts; full happy path with partial payment and overdue → default path): [`docs/E2E_SANDBOX.md`](E2E_SANDBOX.md), [#15](https://github.com/dev-salami/tradewind/pull/15).
+
 - [x] **F1** Wallet connect and exporter onboarding (wallet selector, display name/country, USDC storage registration before first advance) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F2** Invoice creation + document upload (fields, browser SHA-256 doc hash, terms hash, `create_invoice` with storage deposit, face/max/buyer≠exporter guards) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F3** Private AI verification via NEAR AI Cloud (verifiable-model allowlist, `provider_tee` signature fetch + EIP-191 check, verdict recomputed server-side, attester writes `record_verification`; unverified blocks advance; mock fixtures when no key) — [#5](https://github.com/dev-salami/tradewind/pull/5) (live NEAR AI path + mock until a key exists; TDX quote/E2EE TODOs documented)
