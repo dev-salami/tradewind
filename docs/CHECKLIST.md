@@ -14,7 +14,7 @@ Network rule for this build: **testnet / local sandbox only**. Mainnet items sta
 - [x] **F7a** USDC pool vault (deposit via `ft_transfer_call`, redeem up to idle, allowlist with refund) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F8** Advance from the pool (rate lock, fees, liquidity + exposure caps, `expected_terms_hash`/`min_advance` guards, revert callback on failed transfer) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F10a** Overdue / default path on-chain (keeper `mark_overdue` / `mark_default`, write-off, freeze, events) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
-- [ ] **F11** Any-chain buyer payment via NEAR Intents 1Click (EXACT_OUTPUT quote, `dry` preview, status polling, Path A `customRecipientMsg` / Path B relayer / Path C direct; **no mainnet spend**) — _Path C direct pay merged (#9); 1Click Path A/B pending_
+- [x] **F11** Any-chain buyer payment via NEAR Intents 1Click (EXACT_OUTPUT quote, `dry` preview, status polling, Path A `customRecipientMsg` / Path B relayer / Path C direct; **no mainnet spend**) — [#12](https://github.com/dev-salami/tradewind/pull/12) (Path C direct in #9). Testnet: dry preview quotes + labelled simulator; live deposit-address quotes gated to mainnet + `ONECLICK_LIVE_QUOTES=1` + explicit click, never exercised (no mainnet spend). Path B relayer forwarding job not built (Path A default)
 - [x] **F12** Repayment waterfall (pool principal → pool fee → protocol → exporter, claimable fallback, events, exact to 1e-6) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
 - [ ] **F14** Public receipts `/r/:id` (timeline with tx links, AI proof + Verify, waterfall bars) — _read-only screen from fixtures (#2); tx links + Verify pending_
 - [ ] **F15a** LP dashboard basic (pool totals, share price from contract view, funded invoices, position) — _read-only screen from fixtures (#2); RPC wiring pending_
@@ -32,7 +32,7 @@ Network rule for this build: **testnet / local sandbox only**. Mainnet items sta
 
 ## P2 — last
 
-- [ ] **F13** Partial payments UX (pay full / pay part, progress bar, per-part split list, per-part Telegram card). Contract support ships with F12. — _contract partial accounting merged (#1, #3); UX pending_
+- [x] **F13** Partial payments UX (pay full / pay part, progress bar, per-part split list, per-part Telegram card). Contract support ships with F12. — [#12](https://github.com/dev-salami/tradewind/pull/12) pay full / pay part, progress bar, split list; per-part Telegram card from worker (#7)
 
 ## Stretch (only if all above are done)
 
