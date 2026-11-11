@@ -58,3 +58,6 @@ testnet faucet token, never deploy to mainnet.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+## AI verification foundation
+
+See [AI verification setup and limitations](docs/AI_VERIFICATION.md) for exact environment variables, API usage, sample PDF generation, and the implemented live signature flow. **Full TDX quote verification, E2EE and scanned-PDF vision are still TODO.** Current live verification checks response signatures against preflight-reported identities, not fully verified hardware evidence. Mock and fixture results are explicitly labeled and are not TEE results. AI checks consistency, not invoice authenticity; the contract trusts the backend attester. Request hashes do not publicly prove document contents, and deal amounts/buyer accounts remain public.

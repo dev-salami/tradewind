@@ -80,16 +80,19 @@ export function AreaLine({
   const W = 560;
   const H = 210;
   const left = 46;
-  const max = Math.max(...values, 1) * 1.2;
+  const low = values.length ? Math.min(...values) : 0;
+  const high = values.length ? Math.max(...values) : 1;
+  const padding = Math.max(Math.abs(low), Math.abs(high), 1) * .005;
+  const min = low - padding, max = high + padding;
   const xs = labels.map(
     (_, i) => left + i * ((W - left - 12) / (labels.length - 1 || 1)),
   );
-  const y = (v: number) => 14 + (H - 14) * (1 - v / max);
+  const y = (v: number) => 14 + (H - 14) * (1 - (v - min) / (max - min));
   const pts = values.map((v, i) => [xs[i], y(v)] as [number, number]);
   const line = smooth(pts);
   const [selection, setSel] = useState(0);
   const sel = Math.min(Math.max(0, selection), Math.max(0, values.length - 1));
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => max * f);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => min + (max - min) * f);
   if (!values.length || values.length !== labels.length) return <p className="tw-empty">No share-price history yet.</p>;
   return (
     <svg
@@ -180,7 +183,6 @@ export function Donut({
   if (!segments.length || segments.every(s => s.value === 0)) return <p className="tw-empty">No pool assets yet.</p>;
   const R = 100;
   const r = 62;
-  let a0 = -Math.PI / 2;
   const arc = (start: number, end: number, outer: number, inner: number) => {
     const large = end - start > Math.PI ? 1 : 0;
     const p = (ang: number, rad: number) =>
@@ -214,9 +216,8 @@ export function Donut({
       </defs>
       {segments.map((s, i) => {
         const span = (s.value / total) * Math.PI * 2;
-        const start = a0;
-        const end = a0 + Math.max(span - 0.02, 0.001);
-        a0 += span;
+        const start = -Math.PI / 2 + segments.slice(0, i).reduce((sum, s) => sum + s.value / total * Math.PI * 2, 0);
+        const end = start + Math.max(span - 0.02, 0.001);
         if (s.value <= 0) return null;
         const isMain = i === main;
         return (

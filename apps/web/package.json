@@ -2,7 +2,8 @@
   "name": "@tradewind/web", "version": "0.1.0", "private": true, "type": "module",
   "scripts": { "dev": "next dev", "build": "next build", "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "eslint ." },
   "dependencies": {
-    "@tradewind/core": "*", "next": "^16.0.1", "react": "^19.2.0", "react-dom": "^19.2.0", "lucide-react": "^0.468.0"
+    "@tradewind/core": "*", "next": "^16.0.1", "react": "^19.2.0", "react-dom": "^19.2.0", "lucide-react": "^0.468.0",
+    "zod": "^3.24.0", "viem": "^2.38.0", "near-api-js": "^5.1.1", "pdfjs-dist": "^4.10.38", "pdf-lib": "^1.17.1", "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17", "tailwindcss": "^4.1.17", "typescript": "^5.9.3",

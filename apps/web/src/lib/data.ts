@@ -16,4 +16,4 @@ export function data(): TradewindData {
   return rpcData({ rpcUrl: process.env.NEAR_RPC_URL || NETWORKS[network()], contractId });
 }
 export function nowNs(): string { return isFixtureMode() ? SAMPLE_NOW : (BigInt(Date.now()) * 1_000_000n).toString(); }
-export function contractHolder(): string { return isFixtureMode() ? "sample-pool.testnet (sample)" : process.env.NEXT_PUBLIC_CORE_CONTRACT_ID || "Contract not configured"; }
+export function contractHolder(): string { return process.env.NEXT_PUBLIC_CORE_CONTRACT_ID || "core.tradewind-demo.testnet"; }
