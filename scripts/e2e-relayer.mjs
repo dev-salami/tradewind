@@ -30,7 +30,7 @@ if (!e.RELAYER_PRIVATE_KEY) {
 if (e.RELAYER_ACCOUNT_ID !== relayerId) throw new Error("Expected local relayer.test.near");
 const relayerKey = KeyPair.fromString(e.RELAYER_PRIVATE_KEY);
 try { await (await near.account(relayerId)).state(); }
-catch (error) { if (!String(error).includes("does not exist")) throw error; await root.createAccount(relayerId, relayerKey.getPublicKey(), BigInt(utils.format.parseNearAmount("10"))); }
+catch (error) { if (!/does(n.t| not) exist|AccountDoesNotExist/.test(String(error) + (error?.type ?? ""))) throw error; await root.createAccount(relayerId, relayerKey.getPublicKey(), BigInt(utils.format.parseNearAmount("10"))); }
 await ks.setKey(net, relayerId, relayerKey);
 const call = (account, contractId, methodName, args, attachedDeposit = 0n) => account.functionCall({ contractId, methodName, args, attachedDeposit, gas: G });
 const view = (contractId, methodName, args = {}) => root.viewFunction({ contractId, methodName, args });
