@@ -3,11 +3,11 @@
   "scripts": { "dev": "next dev", "build": "next build", "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "eslint ." },
   "dependencies": {
     "@tradewind/core": "*", "next": "^16.0.1", "react": "^19.2.0", "react-dom": "^19.2.0", "lucide-react": "^0.468.0",
-    "zod": "^3.24.0", "viem": "^2.38.0", "near-api-js": "^5.1.1", "pdfjs-dist": "^4.10.38", "pdf-lib": "^1.17.1", "server-only": "^0.0.1"
+    "zod": "^3.24.0", "viem": "^2.38.0", "near-api-js": "^5.1.1", "pdfjs-dist": "^4.10.38", "pdf-lib": "^1.17.1", "server-only": "^0.0.1", "grammy": "^1.38.3", "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17", "tailwindcss": "^4.1.17", "typescript": "^5.9.3",
-    "@types/node": "^22.19.0", "@types/react": "^19.2.2", "@types/react-dom": "^19.2.2",
+    "@types/node": "^22.19.0", "@types/react": "^19.2.2", "@types/react-dom": "^19.2.2", "@types/qrcode": "^1.5.5",
     "vitest": "^3.2.4", "jsdom": "^26.1.0", "@testing-library/react": "^16.3.0",
     "@testing-library/dom": "^10.4.1", "@testing-library/jest-dom": "^6.9.1",
     "eslint": "^9.39.0", "eslint-config-next": "^16.0.1"

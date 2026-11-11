@@ -1,0 +1,33 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { openAutomationStore, type AutomationStore } from "@tradewind/core/automation-store";
+import { fixtureData, SAMPLE_NOW, type Invoice } from "@tradewind/core";
+import { indexer, reminders, type JobDependencies } from "../src/jobs";
+const stores: AutomationStore[] = [];
+afterEach(() => { for (const s of stores.splice(0)) s.db.close(); });
+it("atomically deduplicates indexer cards, pool history and reminder records", async () => {
+  const s = openAutomationStore(":memory:"); stores.push(s);
+  const f = fixtureData({ stage: "Accepted" });
+  const invoice = (await f.getInvoice("TW-0042"))!;
+  const d: JobDependencies = { invoice: f.getInvoice, preview: f.previewAdvance, buyer: f.getBuyerRecord, approver: async () => null, send: vi.fn(), botAccount: "", base: "https://example.test", network: "testnet", list: from => f.listInvoices(from, 50), pool: f.getPool, config: f.getConfig, keeper: vi.fn(), keeperConfigured: false };
+  await indexer(s, d, SAMPLE_NOW);
+  const count = () => Number(s.db.prepare("SELECT count(*) AS n FROM notifications_outbox").get()!.n);
+  const first = count(); expect(first).toBeGreaterThan(0);
+  await indexer(s, d, SAMPLE_NOW); expect(count()).toBe(first);
+  expect(s.db.prepare("SELECT count(*) AS n FROM pool_snapshots").get()?.n).toBe(1);
+  const config = await f.getConfig();
+  const now = (BigInt(invoice.due_at!) - BigInt(config.seconds_per_day) * 1_000_000_000n).toString();
+  reminders(s, d, [invoice], now, config); reminders(s, d, [invoice], now, config);
+  expect(s.db.prepare("SELECT step, channel FROM reminders").all()).toEqual([{ step: "T-1", channel: "log" }]);
+  expect(count()).toBe(first + 2);
+});
+it("indexes each payment separately when several parts arrive between polls", async () => {
+  const s = openAutomationStore(":memory:"); stores.push(s);
+  let f = fixtureData({ stage: "Funded" });
+  const d: JobDependencies = { invoice: id => f.getInvoice(id), preview: id => f.previewAdvance(id), buyer: a => f.getBuyerRecord(a), approver: async () => null, send: vi.fn(), botAccount: "", base: "https://example.test", network: "testnet", list: from => f.listInvoices(from, 50), pool: () => f.getPool(), config: () => f.getConfig(), keeper: vi.fn(), keeperConfigured: false };
+  await indexer(s, d, SAMPLE_NOW); f = fixtureData({ stage: "Repaid" });
+  await indexer(s, d, SAMPLE_NOW);
+  const cards = s.db.prepare("SELECT payload FROM notifications_outbox WHERE dedupe_key LIKE 'TW-0042:payment_received:%'").all();
+  expect(cards).toHaveLength(2);
+  expect(String(cards[0].payload)).toContain("pool $6.00");
+  expect(String(cards[1].payload)).toContain("pool $2.15");
+});

@@ -1,7 +1,7 @@
 {
   "name": "@tradewind/core", "version": "0.1.0", "private": true,
-  "type": "module", "exports": { ".": "./src/index.ts" },
+  "type": "module", "exports": { ".": "./src/index.ts", "./automation-store": "./src/automation-store.ts" },
   "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "lint": "tsc --noEmit", "test": "vitest run" },
   "dependencies": { "@noble/hashes": "^1.8.0" },
-  "devDependencies": { "typescript": "^5.9.3", "vitest": "^3.2.4" }
+  "devDependencies": { "@types/node": "^22.19.0", "typescript": "^5.9.3", "vitest": "^3.2.4" }
 }

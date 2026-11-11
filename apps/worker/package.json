@@ -1,0 +1,6 @@
+{
+  "name": "@tradewind/worker", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": { "start": "tsx src/index.ts", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "@tradewind/core": "*", "tsx": "^4.20.6", "near-api-js": "^5.1.1", "grammy": "^1.38.3" },
+  "devDependencies": { "@types/node": "^22.19.0", "typescript": "^5.9.3", "vitest": "^3.2.4" }
+}
