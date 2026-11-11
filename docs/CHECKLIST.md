@@ -6,21 +6,21 @@ Network rule for this build: **testnet / local sandbox only**. Mainnet items sta
 
 ## P0 — must ship
 
-- [ ] **F1** Wallet connect and exporter onboarding (wallet selector, display name/country, USDC storage registration before first advance)
-- [ ] **F2** Invoice creation + document upload (fields, browser SHA-256 doc hash, terms hash, `create_invoice` with storage deposit, face/max/buyer≠exporter guards) — _contract side merged (#1, #3); web/wallet flow pending_
+- [x] **F1** Wallet connect and exporter onboarding (wallet selector, display name/country, USDC storage registration before first advance) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
+- [x] **F2** Invoice creation + document upload (fields, browser SHA-256 doc hash, terms hash, `create_invoice` with storage deposit, face/max/buyer≠exporter guards) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F3** Private AI verification via NEAR AI Cloud (verifiable-model allowlist, `provider_tee` signature fetch + EIP-191 check, verdict recomputed server-side, attester writes `record_verification`; unverified blocks advance; mock fixtures when no key) — [#5](https://github.com/dev-salami/tradewind/pull/5) (live NEAR AI path + mock until a key exists; TDX quote/E2EE TODOs documented)
-- [ ] **F4** Buyer review + on-chain acceptance (only named buyer, terms hash match, `due_at`) — _contract side merged (#1, #3); web/wallet flow pending_
+- [x] **F4** Buyer review + on-chain acceptance (only named buyer, terms hash match, `due_at`) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F5** Invoice NFT NEP-171 minted on acceptance (core + metadata + enumeration, `nft_mint` event, holder transfers disabled, moves to pool on advance, back on repay) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
-- [ ] **F7a** USDC pool vault (deposit via `ft_transfer_call`, redeem up to idle, allowlist with refund) — _contract side merged (#1, #3); web/wallet flow pending_
-- [ ] **F8** Advance from the pool (rate lock, fees, liquidity + exposure caps, `expected_terms_hash`/`min_advance` guards, revert callback on failed transfer) — _contract side merged (#1, #3); web/wallet flow pending_
+- [x] **F7a** USDC pool vault (deposit via `ft_transfer_call`, redeem up to idle, allowlist with refund) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
+- [x] **F8** Advance from the pool (rate lock, fees, liquidity + exposure caps, `expected_terms_hash`/`min_advance` guards, revert callback on failed transfer) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 - [x] **F10a** Overdue / default path on-chain (keeper `mark_overdue` / `mark_default`, write-off, freeze, events) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
-- [ ] **F11** Any-chain buyer payment via NEAR Intents 1Click (EXACT_OUTPUT quote, `dry` preview, status polling, Path A `customRecipientMsg` / Path B relayer / Path C direct; **no mainnet spend**)
+- [ ] **F11** Any-chain buyer payment via NEAR Intents 1Click (EXACT_OUTPUT quote, `dry` preview, status polling, Path A `customRecipientMsg` / Path B relayer / Path C direct; **no mainnet spend**) — _Path C direct pay merged (#9); 1Click Path A/B pending_
 - [x] **F12** Repayment waterfall (pool principal → pool fee → protocol → exporter, claimable fallback, events, exact to 1e-6) — [#1](https://github.com/dev-salami/tradewind/pull/1), sandbox [#3](https://github.com/dev-salami/tradewind/pull/3)
 - [ ] **F14** Public receipts `/r/:id` (timeline with tx links, AI proof + Verify, waterfall bars) — _read-only screen from fixtures (#2); tx links + Verify pending_
 - [ ] **F15a** LP dashboard basic (pool totals, share price from contract view, funded invoices, position) — _read-only screen from fixtures (#2); RPC wiring pending_
 - [ ] **F16** Demo clock, honest labels, testnet sandbox (+ guided "play both sides" on testnet only) — _banner/labels in #2; guided mode pending_
 - [ ] **F17** Judge-ready repo (README "do X → see Y", MIT LICENSE, `make test`, `npm run demo:local`, libraries + reuse disclosure, no secrets) — _LICENSE, make test, demo:local merged (#3); judge README pending_
-- [ ] **F18** Admin/ops console (owner-only page + CLI: pause, allowlist, config, attribute/refund, unfreeze, run keeper) — _contract side merged (#1, #3); web/wallet flow pending_
+- [x] **F18** Admin/ops console (owner-only page + CLI: pause, allowlist, config, attribute/refund, unfreeze, run keeper) — _wallet flow merged ([#9](https://github.com/dev-salami/tradewind/pull/9)); not run against a live testnet deploy (no deploys)_
 
 ## P1 — approved additions
 
