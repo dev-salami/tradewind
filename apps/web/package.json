@@ -2,6 +2,7 @@
   "name": "@tradewind/web", "version": "0.1.0", "private": true, "type": "module",
   "scripts": { "dev": "next dev", "build": "next build", "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "eslint ." },
   "dependencies": {
+    "@phala/dcap-qvl": "0.7.1", "@noble/hashes": "1.7.1", "@napi-rs/canvas": "0.1.80",
     "@noble/curves": "1.8.1", "@scure/base": "1.2.6", "buffer": "6.0.3",
     "@near-wallet-selector/core": "8.10.2", "@near-wallet-selector/modal-ui": "8.10.2", "@near-wallet-selector/my-near-wallet": "8.10.2", "@near-wallet-selector/meteor-wallet": "8.10.2", "@near-wallet-selector/hot-wallet": "8.10.2",
     "@tradewind/core": "*", "next": "^16.0.1", "react": "^19.2.0", "react-dom": "^19.2.0", "lucide-react": "^0.468.0",
