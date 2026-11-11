@@ -4,6 +4,7 @@ import { approvalDependencies } from "../../web/src/server/telegram/dependencies
 import { view, signedCall } from "../../web/src/server/telegram/near";
 import { flushNotifications } from "../../web/src/server/telegram/notify";
 import { indexer, keeper, reminders, log, type JobDependencies } from "./jobs";
+import { indexChain, indexerOptions } from "./chain-indexer";
 // DATABASE_PATH should be absolute: npm workspace scripts have different working directories.
 const s = openAutomationStore(process.env.DATABASE_PATH || "../web/data/tradewind.db");
 const d: JobDependencies = { ...approvalDependencies(), list: from => view<Invoice[]>("list_invoices", { from_index: String(from), limit: 50 }), pool: () => view<Pool>("get_pool"), config: () => view<Config>("get_config"), keeper: (method, id) => signedCall("KEEPER", method, { id }), keeperConfigured: !!process.env.KEEPER_ACCOUNT_ID && !!process.env.KEEPER_PRIVATE_KEY };
@@ -21,6 +22,7 @@ async function tick() {
   const now = fixtures ? SAMPLE_NOW : (BigInt(Date.now()) * 1_000_000n).toString();
   let invoices: Invoice[] = [], config: Config | undefined;
   try { const result = await indexer(s, d, now); invoices = result.invoices; config = result.config; } catch { log("indexer", "failed"); }
+  if (!fixtures) try { log("chain_indexer", "complete", await indexChain(s.db, indexerOptions())); } catch { log("chain_indexer", "failed"); }
   // Keep jobs independent: a pool/indexer outage must not suppress keeper/reminder work.
   if (!config) try { config = await d.config(); invoices = (s.db.prepare("SELECT json_snapshot FROM invoices_cache").all()).map(r => JSON.parse(String(r.json_snapshot)) as Invoice); } catch { log("cache", "failed"); }
   if (config) {

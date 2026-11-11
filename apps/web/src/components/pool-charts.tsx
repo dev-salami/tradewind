@@ -13,6 +13,5 @@ export function PoolCharts({ pool, history }: { pool: Pool; history: PoolHistory
     <Segments value={idlePct} total={100} color="#00C08B" />
   </section><section className="tw-card"><h2>Share price · twPOOL</h2><p className="tw-muted">Principal returns preserve value. Pool fees grow it; defaults reduce it.</p>
     <AreaLine labels={history.map(p => p.label)} values={history.map(p => Number(p.share_price_e6))} format={v => formatSharePrice(BigInt(Math.max(0, Math.floor(v))))} />
-    {!history.length && <p className="tw-muted tw-small">Historical snapshots will come from the event indexer.</p>}
   </section></div>;
 }
