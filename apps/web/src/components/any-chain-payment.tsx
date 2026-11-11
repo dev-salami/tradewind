@@ -53,7 +53,7 @@ function PaymentForm({ invoice, minPayment, liveAllowed, preview, initialPart }:
     await run(async () => {
       const originAsset = ORIGIN_ASSETS[chain as OriginChain].assetId ?? chain;
       const q = await json<Quote>(`/api/pay/${encodeURIComponent(invoice.id)}/quote`, { originAsset, amount: units, refundTo: refund, live });
-      setQuote(q); setQr(""); setProgress(undefined); setSimulation(undefined);
+      setQuote(q); setQr(undefined); setProgress(undefined); setSimulation(undefined);
       if (q.pid) {
         setProgress({ status: "PENDING_DEPOSIT", label: "Waiting for deposit", settlement: { confirmed: false } });
         try { sessionStorage.setItem(`payment:${network()}:${invoice.id}`, JSON.stringify({ quote: q, chain, refund })); } catch { /* Download remains available. */ }
