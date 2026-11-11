@@ -47,16 +47,22 @@ describe("guided UI", () => {
   it("hides the page and navigation on mainnet without fetching", () => {
     vi.stubEnv("NEXT_PUBLIC_NEAR_NETWORK", "mainnet");
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
-    const { container } = render(<><GuidedMode /><GuidedNavLink active={false} /></>);
+    const { container } = render(<GuidedNavLink active={false} />);
     expect(container).toBeEmptyDOMElement();
+    render(<GuidedMode />);
+    expect(screen.getByText(/Guided mode is not enabled/)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it.each([403, 503])("silently hides unavailable guided mode (%s)", async status => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: "unavailable" }, { status }));
     vi.stubGlobal("fetch", fetchMock);
-    const { container } = render(<><GuidedMode /><GuidedNavLink active={false} /></>);
+    const nav = render(<GuidedNavLink active={false} />);
+    render(<GuidedMode />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(container).toBeEmptyDOMElement();
+    expect(nav.container).toBeEmptyDOMElement();
+    expect(await screen.findByText(/Guided mode is not enabled/)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith("/api/guided/status", expect.objectContaining({ method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }));
   });
   it("runs the loop with the returned ID, preserves mock labels, and resumes payments", async () => {

@@ -5,19 +5,19 @@ import { network } from "@/lib/env-public";
 import { emptyGuidedProgress, GUIDED_STORAGE_KEY, guidedAvailable, guidedStepEnabled, guidedUnits, resumeGuided, testnetTxLinks, type GuidedProgress, type GuidedResult, type GuidedStep } from "@/lib/guided-steps";
 import { Card, Pill } from "./surfaces";
 
-function useGuidedAvailability() {
+function useGuidedAvailability(onChecked?: () => void) {
   const [available, setAvailable] = useState(false);
   useEffect(() => {
-    if (network() === "mainnet") return;
+    if (network() === "mainnet") { onChecked?.(); return; }
     let alive = true;
     void fetch("/api/guided/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", cache: "no-store" })
       .then(async response => {
         if (!response.ok) return;
         const body = await response.json() as { available?: unknown };
         if (alive) setAvailable(guidedAvailable(network(), response.status, body));
-      }).catch(() => { /* Unavailable guided mode is intentionally silent. */ });
+      }).catch(() => { /* Unavailable guided mode is intentionally silent. */ }).finally(() => { if (alive) onChecked?.(); });
     return () => { alive = false; };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return network() !== "mainnet" && available;
 }
 
@@ -27,7 +27,8 @@ export function GuidedNavLink({ active }: { active: boolean }) {
 }
 
 export function GuidedMode() {
-  const available = useGuidedAvailability();
+  const [checked, setChecked] = useState(false);
+  const available = useGuidedAvailability(() => setChecked(true));
   const [progress, setProgress] = useState<GuidedProgress>(emptyGuidedProgress);
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
   const [face, setFace] = useState(""), [amount, setAmount] = useState("");
@@ -66,7 +67,7 @@ export function GuidedMode() {
       setError("Request outcome unknown. Inspect chain state before starting another sample.");
     } finally { running.current = false; setBusy(false); }
   }
-  if (!available || network() === "mainnet") return null;
+  if (!available || network() === "mainnet") return checked ? <Card title="Play both sides"><p className="tw-muted">Guided mode is not enabled on this deployment. It runs only on testnet when the operator configures disposable demo accounts. Connect a testnet wallet to try the flow yourself.</p></Card> : null;
   const disabled = (step: GuidedStep) => !ready || !guidedStepEnabled(progress, step, busy);
   return <div className="tw-stack">
     <header><p className="tw-eyebrow">Tradewind · guided demo</p><h1>Play both sides</h1><p className="tw-muted">Testnet only · demo accounts sign for you · no real funds</p></header>
