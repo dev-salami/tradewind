@@ -19,10 +19,15 @@ The flag alone never makes previews live. `?dry=1` always forces a preview.
 The UI also requires `NEXT_PUBLIC_DATA_SOURCE=rpc`; fixture screens never
 offer live deposit addresses. Keep public network/contract settings aligned
 with the server settings.
-Testnet and sandbox force dry even with the flag and an explicit live request.
-The simulator returns a six-second script, never writes a payment intent or
-changes the invoice, and always reports settlement as unconfirmed. Actual
-testnet repayment uses **Pay on NEAR (testnet USDC)**.
+Testnet and sandbox force dry unless `ONECLICK_SIMULATOR=1` and
+`ONECLICK_BASE_URL` points to an HTTP localhost fake server. This separate mode
+allows an explicit `{live:true}` action to create a **simulated**, non-dry intent;
+`?dry=1` still wins. It is refused on mainnet, skips the mainnet asset check,
+and still checks recipient storage registration. Responses include
+`simulated:true`; the UI shows **Simulated 1Click (local) · Trusted settlement
+relayer**. Never send funds to a fake address: no real cross-chain funds move.
+The older `/simulate` endpoint remains a six-second, no-write status preview.
+Actual testnet repayment uses **Pay on NEAR (testnet USDC)**.
 
 ## What a mainnet live quote does
 
@@ -52,14 +57,15 @@ refunded by 1Click to the validated refund address.
   by this server. Mainnet use still needs independent approval and tiny-amount
   verification of the experimental path.
 - `SETTLEMENT_PATH=B`: requires `RELAYER_ACCOUNT_ID`; recipient is the relayer,
-  with no custom message. **Trusted settlement relayer (MVP)**. This brief does
-  not implement forwarding and cannot complete invoice settlement itself.
-  A later worker must reconcile and forward exactly once. Do not use Path B
-  for funds until that worker exists. SUCCESS alone is not proof of repayment.
+  with no custom message. **Trusted settlement relayer** holds funds in transit.
+  The worker durably claims each intent, forwards delivered USDC to the invoice
+  contract, and reconciles its `payment_ref` on chain. Uncertain sends are never
+  automatically repeated. SUCCESS alone is not proof of repayment. See
+  [RELAYER.md](RELAYER.md) for the custody boundary, manual review and local E2E.
 
 Other configuration: `CORE_CONTRACT_ID`, `USDC_CONTRACT_ID`, `NEAR_RPC_URL`,
-`DATABASE_PATH`, optional `ONECLICK_BASE_URL` and `ONECLICK_JWT`. No relayer
-private key is needed or read by this implementation.
+`DATABASE_PATH`, optional `ONECLICK_BASE_URL` and `ONECLICK_JWT`. Only the worker
+reads `RELAYER_PRIVATE_KEY`; the web server never signs or exposes this key.
 
 ## Routes and reconciliation
 
@@ -71,13 +77,13 @@ private key is needed or read by this implementation.
 - `POST /api/pay/intents/:pid/deposit-tx`: `{txHash}`. The stored address and
   memo are used; the caller cannot redirect them.
 - `GET /api/pay/intents/:pid/status`: 1Click status, transaction hashes and
-  `settlement.confirmed`, true only for SUCCESS **and** a contract payment
-  whose `payment_ref` equals the intent UUID. SUCCESS without that payment
+  `settlement.confirmed`, true only for a contract payment
+  whose `payment_ref` equals the intent UUID (the chain is authoritative). SUCCESS without that payment
   says awaiting invoice settlement, including on Path B.
 - `GET /api/pay/:id/intents`: read-only reconciliation rows for this network.
   The SQLite `payment_intents` table additionally holds the full signed quote,
-  refund address, `payment_ref`, and reserved `settled_tx`. A forwarding worker
-  must supply an actually verified forwarding hash; this server never invents one.
+   refund address, `payment_ref`, and `settled_tx`. The forwarding worker writes
+   its forwarding hash only after the chain payment appears; this server never invents one.
 - `POST /api/pay/:id/simulate`: testnet/sandbox only; scripted statuses, no RPC,
   1Click, fund movement, or settlement writes. Refuses on mainnet.
 
@@ -88,10 +94,8 @@ status. Overpaid units remain contract-held for manual owner refund, never
 automatically returned to an Intents sender. Outstanding is checked at quote
 time; concurrent payments can still race, so a quote does not reserve balance.
 
-## Offline handoff
+## Validation
 
-No install, Node command, network call, deployment or fund movement was run in
-this worktree. Reviewer should install from the lockfile, then run core/web
-tests, typecheck, lint and build. Mocked-fetch tests cover both settlement paths,
-dry/live gating, network forcing, amount rules, status/settlement separation,
-token resolution, memo handling, migrations and the simulator.
+Run `npm test`, `npm run typecheck`, `npm run lint`, and
+`npm run build -w apps/web`. Tests use mocked fetch or a localhost fake, never
+live quotes. The local sandbox E2E and exact commands are in [RELAYER.md](RELAYER.md).

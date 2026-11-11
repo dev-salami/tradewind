@@ -17,14 +17,21 @@ function rateLimit(request: Request) {
   windows.set(ip, w);
   if (++w.count > 10) throw new ApiError("Quote limit reached; retry in a minute", 429);
 }
-export function liveQuotesAllowed() { const e = env(); return e.NEAR_NETWORK === "mainnet" && e.ONECLICK_LIVE_QUOTES === "1"; }
-const client = () => { const e = env(); return new OneClickClient(e.ONECLICK_BASE_URL, e.ONECLICK_JWT); };
+export function simulatorEnabled() {
+  if (process.env.ONECLICK_SIMULATOR !== "1") return false;
+  if (env().NEAR_NETWORK === "mainnet") throw new ApiError("ONECLICK_SIMULATOR refused on mainnet", 403);
+  const url = new URL(process.env.ONECLICK_BASE_URL || "https://1click.chaindefuser.com");
+  if (url.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) throw new ApiError("Simulator requires a localhost ONECLICK_BASE_URL", 503);
+  return true;
+}
+export function liveQuotesAllowed() { const simulated = simulatorEnabled(), e = env(); return simulated || (e.NEAR_NETWORK === "mainnet" && e.ONECLICK_LIVE_QUOTES === "1"); }
+const client = () => { simulatorEnabled(); const e = env(); return new OneClickClient(e.ONECLICK_BASE_URL, e.ONECLICK_JWT); };
 const quoteBody = z.object({ originAsset: z.string().min(1).max(250), amount: z.string().regex(/^\d{1,39}$/).optional(), refundTo: z.string().min(1).max(100), live: z.boolean().optional() }).strict();
 const payable = ["Accepted", "Funded", "PartiallyPaid", "Defaulted"];
 export async function quotePayment(request: Request, id: string) {
   assertSameOrigin(request); rateLimit(request);
   const body = quoteBody.parse(await request.json());
-  const e = env(), api = client();
+  const e = env(), simulated = simulatorEnabled(), api = client();
   const [invoice, config] = await Promise.all([getInvoice(e.NEAR_RPC_URL, e.CORE_CONTRACT_ID, id), getConfig(e.NEAR_RPC_URL, e.CORE_CONTRACT_ID)]);
   if (!invoice) throw new ApiError("Invoice not found", 404);
   if (!payable.includes(invoice.status)) throw new ApiError("Invoice is not payable");
@@ -43,7 +50,7 @@ export async function quotePayment(request: Request, id: string) {
   const pid = randomUUID();
   const req = buildRepayQuote({ invoiceId: id, outstandingUnits: outstanding, amountUnits: body.amount ?? outstanding.toString(), minPayment: config.min_payment, originAsset: token.assetId, refundTo: body.refundTo, recipient: e.CORE_CONTRACT_ID, paymentRef: pid, path: e.SETTLEMENT_PATH, relayer: e.RELAYER_ACCOUNT_ID, dry });
   if (!dry) {
-    if (`nep141:${e.USDC_CONTRACT_ID}` !== NEAR_USDC_ASSET) throw new ApiError("Live quotes require mainnet USDC configuration", 503);
+    if (!simulated && `nep141:${e.USDC_CONTRACT_ID}` !== NEAR_USDC_ASSET) throw new ApiError("Live quotes require mainnet USDC configuration", 503);
     const storage = await viewFunction(e.NEAR_RPC_URL, e.USDC_CONTRACT_ID, "storage_balance_of", { account_id: req.recipient });
     if (!storage) throw new ApiError("Recipient must be storage-registered on USDC before live quotes", 503);
   }
@@ -53,7 +60,7 @@ export async function quotePayment(request: Request, id: string) {
     store().db.prepare(`INSERT INTO payment_intents (pid, payment_ref, network, invoice_id, origin_asset, amount_out_e6, amount_in, deposit_address, deposit_memo, refund_to, deadline, path, oneclick_status, quote_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(pid, pid, e.NEAR_NETWORK, id, token.assetId, req.amount, q.amountIn, q.depositAddress, q.depositMemo ?? null, body.refundTo, q.deadline, e.SETTLEMENT_PATH, "PENDING_DEPOSIT", JSON.stringify(result), Date.now());
   }
-  return { ...(dry ? {} : { pid }), dry, preview: e.NEAR_NETWORK !== "mainnet", amountIn: q.amountIn, amountInFormatted: q.amountInFormatted, minAmountIn: q.minAmountIn,
+  return { ...(dry ? {} : { pid }), dry, simulated, preview: e.NEAR_NETWORK !== "mainnet", amountIn: q.amountIn, amountInFormatted: q.amountInFormatted, minAmountIn: q.minAmountIn,
     ...(dry ? {} : { depositAddress: q.depositAddress, depositMemo: q.depositMemo }), deadline: dry ? req.deadline : q.deadline,
     timeEstimate: q.timeEstimate, path: e.SETTLEMENT_PATH, amountOut: req.amount, refundFee: q.refundFee, withdrawFee: q.withdrawFee,
     // Preserve the signed quote for dispute records only for real deposits.
@@ -72,7 +79,7 @@ export async function depositTransaction(request: Request, pid: string) {
   const row = intent(pid);
   const result = await client().submitDeposit({ txHash, depositAddress: row.deposit_address, ...(row.deposit_memo === null ? {} : { memo: row.deposit_memo }) });
   store().db.prepare("UPDATE payment_intents SET origin_tx = ?, oneclick_status = ? WHERE pid = ?").run(txHash, result.status, pid);
-  return { status: result.status };
+  return { status: result.status, simulated: simulatorEnabled() };
 }
 export async function paymentStatus(pid: string) {
   const row = intent(pid), e = env();
@@ -80,13 +87,13 @@ export async function paymentStatus(pid: string) {
   const payment = invoice?.payments.find(p => p.payment_ref === pid);
   const nearTx = result.swapDetails.nearTxHashes.at(-1) ?? null;
   store().db.prepare("UPDATE payment_intents SET oneclick_status = ?, near_tx = ?, origin_tx = COALESCE(?, origin_tx) WHERE pid = ?").run(result.status, nearTx, result.swapDetails.originChainTxHashes.at(-1)?.hash ?? null, pid);
-  const confirmed = result.status === "SUCCESS" && !!payment;
+  const confirmed = !!payment;
   return { status: result.status, label: result.status === "SUCCESS" && !payment ? "Delivered on NEAR — awaiting invoice settlement" : STATUS_LABELS[result.status],
-    settlement: { confirmed, payment: payment ?? null }, path: row.path, swapDetails: result.swapDetails };
+    settlement: { confirmed, payment: payment ?? null }, path: row.path, simulated: simulatorEnabled(), swapDetails: result.swapDetails };
 }
 /** Read-only reconciliation surface; no worker or signing capability here. */
 export function invoiceIntents(id: string) {
-  return { intents: store().db.prepare("SELECT pid, payment_ref, invoice_id, origin_asset, amount_out_e6, amount_in, deposit_address, deposit_memo, deadline, path, oneclick_status, origin_tx, near_tx, settled_tx, created_at FROM payment_intents WHERE invoice_id = ? AND network = ? ORDER BY created_at").all(id, env().NEAR_NETWORK) };
+  return { simulated: simulatorEnabled(), intents: store().db.prepare("SELECT pid, payment_ref, invoice_id, origin_asset, amount_out_e6, amount_in, deposit_address, deposit_memo, deadline, path, oneclick_status, origin_tx, near_tx, settled_tx, created_at FROM payment_intents WHERE invoice_id = ? AND network = ? ORDER BY created_at").all(id, env().NEAR_NETWORK) };
 }
 export function simulatePayment(request: Request) {
   assertSameOrigin(request);
