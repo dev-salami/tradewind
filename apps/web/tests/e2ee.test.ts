@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { createEncryptionSession, encryptContent, decryptContent } from "../src/server/nearai/e2ee";

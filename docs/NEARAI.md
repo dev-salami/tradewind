@@ -113,7 +113,7 @@ does not modify the contract or replace its trust policy.
 
 ## Offline fixtures and refreshing
 
-`apps/web/test/fixtures/nearai` contains recorded public reports, nonces, the
+`apps/web/tests/fixtures/nearai` contains recorded public reports, nonces, the
 model catalog, and DCAP collateral. Tests always pass `verify-now-secs.txt`,
 never the current time. The vision collateral reuses the supplied collateral
 with the vision quote's embedded PCK certificate chain (as `getCollateral`
@@ -123,16 +123,14 @@ local E2EE and authentication failures, raster-only PDFs, draft reuse and chain
 precedence. Route integration tests explicitly stub the DCAP boundary; the
 separate real-report tests verify DCAP without any stubs or network.
 
-Run the scoped offline suite:
+Run the complete offline suite:
 
 ```sh
-npm test -w apps/web -- --config test/vitest.config.ts
+npm test -w apps/web
 ```
 
-The existing default Vitest config includes only `tests/**`; the new suite is
-under the requested `test/**` allowlist. Legacy tests asserting metadata gating,
-unsigned preflight acceptance, and scanned-PDF rejection need updating when that
-test directory is in scope.
+All tests run through the default Vitest config under `tests/**`. Shared setup
+disables network access unless a test supplies an explicit fetch stub.
 
 Refresh public reports without an API key:
 
