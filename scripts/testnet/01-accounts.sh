@@ -11,6 +11,7 @@ for account in "$CORE" "$USDC" "$TREASURY" "$ATTESTER" "$KEEPER" "$BOT" "$EXPORT
         "$USDC") amount=3 ;;
         "$EXPORTER") amount=5 ;;
         "$BUYER") amount=10 ;; # Guided root funds isolated 0.5 test NEAR session buyers.
+        "$BUYER2") amount=1 ;; # Pays 300 TGas ft_transfer_call repayments in 06-showcase.
         "$LP") amount=0.5 ;;
     esac
     step "Create $account with $amount testnet NEAR from $ROOT."

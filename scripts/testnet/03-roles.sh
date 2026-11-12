@@ -12,7 +12,7 @@ for role in attester keeper bot; do
         bot) account=$BOT; methods=request_advance; public_key='<BOT_PUBLIC_KEY>' ;;
     esac
     print_command near account add-key "$account" grant-function-call-access \
-        --allowance '0.1 NEAR' --contract-account-id "$CORE" --method-names "$methods" \
+        --allowance '0.1 NEAR' --contract-account-id "$CORE" --function-names "$methods" \
         use-manually-provided-public-key "$public_key" \
         network-config testnet sign-with-legacy-keychain send
 done
