@@ -12,7 +12,7 @@ type Reads = typeof chainReads;
 export function assertReadEndpoint(url: string, allowMainnetRead = false) {
   const endpoint = new URL(url);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname);
-  const testnet = endpoint.hostname === "testnet.near.org" || endpoint.hostname.endsWith(".testnet.near.org") || endpoint.hostname === "testnet.fastnear.com";
+  const testnet = endpoint.hostname === "testnet.near.org" || endpoint.hostname.endsWith(".testnet.near.org") || endpoint.hostname === "testnet.fastnear.com" || endpoint.hostname.endsWith(".testnet.fastnear.com");
   if (!local && (!testnet || endpoint.protocol !== "https:") && !allowMainnetRead) throw new Error("Indexer permits localhost/testnet only; mainnet reads require --allow-mainnet-read");
   if (!["http:", "https:"].includes(endpoint.protocol) || endpoint.username || endpoint.password) throw new Error("Invalid RPC endpoint");
 }

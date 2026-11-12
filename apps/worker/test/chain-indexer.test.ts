@@ -89,6 +89,9 @@ describe("read-only resumable chain scanner", () => {
     expect(() => assertReadEndpoint("https://rpc.mainnet.near.org")).toThrow("mainnet");
     expect(() => assertReadEndpoint("https://rpc.mainnet.near.org", true)).not.toThrow();
     expect(() => assertReadEndpoint("https://testnet.fastnear.com")).not.toThrow();
+    expect(() => assertReadEndpoint("https://rpc.testnet.fastnear.com")).not.toThrow();
+    expect(() => assertReadEndpoint("https://rpc.mainnet.fastnear.com")).toThrow("mainnet");
+    expect(() => assertReadEndpoint("https://eviltestnet.fastnear.com")).toThrow("mainnet");
     expect(() => assertReadEndpoint("http://127.0.0.1:3039")).not.toThrow();
   });
 });
