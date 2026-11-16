@@ -104,12 +104,12 @@ points show a line.
 
 ## One-shot backfill
 
-Node 22 is required (`/opt/node-v22.23.4/bin/node` in this environment).
+Node 22 is required.
 
 ```sh
 node scripts/backfill-events.mjs \
   --rpc http://127.0.0.1:3039 --contract core.test.near \
-  --start-height 123 --db /tmp/opencode/chain-events.db --max-blocks 200
+  --start-height 123 --db /tmp/tradewind/chain-events.db --max-blocks 200
 ```
 
 Optional explicit seed:
@@ -117,7 +117,7 @@ Optional explicit seed:
 ```sh
 node scripts/backfill-events.mjs \
   --rpc http://127.0.0.1:3039 --contract core.test.near \
-  --start-height 123 --db /tmp/opencode/chain-events.db \
+  --start-height 123 --db /tmp/tradewind/chain-events.db \
   --known-txs '[{"hash":"ACTUAL_CHAIN_HASH","sender":"lp.test.near"}]'
 ```
 

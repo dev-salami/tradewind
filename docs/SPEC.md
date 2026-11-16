@@ -363,11 +363,11 @@ flowchart LR
 | Contract `core.<root>` | Rust, `near-sdk` 5.x, `near-contract-standards` (NEP-171, NEP-141, NEP-145) | Dev | One contract holds the invoices (NFT), the vault and share token, the waterfall and the track record. One contract means no cross-contract calls between our own parts, so fewer callback bugs (see Decision D1). |
 | Mock USDC (testnet only) | Standard NEP-141 with a public `mint` faucet, 6 decimals | Dev | `tusdc.<root>.testnet` |
 | Frontend | Next.js (App Router), Tailwind, `@near-wallet-selector`, video palette (navy `#0B1F33`, green `#00C08B`, amber `#F5A524`, off-white `#F6F4EF`, slate `#5B6B7F`, coral `#E5484D`), Inter/Manrope with tabular figures | Dev (copy: PM) | Same look as the concept video |
-| Backend API | Next.js route handlers, `near-api-js` for function-call-key signing, `@nearai/inference-sdk` (Node) | Dev | Keys only in env vars / Coolify secrets |
+| Backend API | Next.js route handlers, `near-api-js` for function-call-key signing, `@nearai/inference-sdk` (Node) | Dev | Keys only in env vars / host secret store |
 | Worker | Node process (same repo): event indexer, keeper, reminder scheduler, 1Click poller, Path B relayer | Dev | Idempotent jobs; cursor stored in DB |
 | Telegram bot | `grammY` (Node), webhook mode, HTML parse mode, inline keyboards | Dev (copy: PM) | Card format copied from the FrontDesk owner card |
-| DB | Postgres (or SQLite if simpler on the VPS) | Dev | Mirror and cache only; the contract is the source of truth for money and status |
-| Hosting | Existing VPS via Coolify, `tradewind.181labs.build` | Dev | **Never restart coolify-proxy.** Keep up to 25 Nov. |
+| DB | Postgres (or SQLite if simpler on the host) | Dev | Mirror and cache only; the contract is the source of truth for money and status |
+| Hosting | Containerised deploy behind a reverse proxy, `tradewind.181labs.build` | Dev | Keep up to 25 Nov. |
 
 ---
 
@@ -636,7 +636,7 @@ All routes live under `/api`. Responses are JSON. Mutating routes check the wall
 4. Reminder scheduler (contract-day based).
 5. Telegram notifier, outbox pattern with retry.
 
-**Env vars (names only, values in Coolify secrets; none in the repo):** `NEAR_NETWORK`, `NEAR_RPC_URL`, `CORE_CONTRACT_ID`, `USDC_CONTRACT_ID`, `ATTESTER_ACCOUNT_ID`, `ATTESTER_PRIVATE_KEY`, `KEEPER_*`, `BOT_*`, `RELAYER_*` (Path B only), `NEARAI_API_KEY`, `NEARAI_MODEL_TEXT`, `NEARAI_MODEL_VISION`, `ONECLICK_BASE_URL`, `ONECLICK_JWT` (optional), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DATABASE_URL`, `SESSION_SECRET`, `PUBLIC_BASE_URL`.
+**Env vars (names only, values in the host's secret store; none in the repo):** `NEAR_NETWORK`, `NEAR_RPC_URL`, `CORE_CONTRACT_ID`, `USDC_CONTRACT_ID`, `ATTESTER_ACCOUNT_ID`, `ATTESTER_PRIVATE_KEY`, `KEEPER_*`, `BOT_*`, `RELAYER_*` (Path B only), `NEARAI_API_KEY`, `NEARAI_MODEL_TEXT`, `NEARAI_MODEL_VISION`, `ONECLICK_BASE_URL`, `ONECLICK_JWT` (optional), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DATABASE_URL`, `SESSION_SECRET`, `PUBLIC_BASE_URL`.
 
 ---
 
@@ -831,7 +831,7 @@ The user message has three parts: `FORM_FIELDS` (JSON), `INVOICE_TEXT`, and opti
 6. **Buyer acceptance** proves that a NEAR account agreed, not that the account belongs to the real company. KYB is on the roadmap.
 7. **Fake invoices and collusion.** Exporter and buyer could collude (two accounts of one person). Guards: `exporter ≠ buyer`, minimum counted face, exposure caps tied to repaid volume, LP allowlist, small caps. These are not proof; real underwriting is on the roadmap. Say so on camera.
 8. **Track-record gaming** (wash invoices to raise the score) is limited by the volume-based exposure cap and `min_counted_face`, but not prevented in the MVP.
-9. **Keys.** Function-call keys for attester, keeper and bot. A full key only for the Path B relayer, if used. All keys live in Coolify secrets, never in the repo or chat. Separate keys for testnet and mainnet. Testnet guided-mode demo keys are testnet only.
+9. **Keys.** Function-call keys for attester, keeper and bot. A full key only for the Path B relayer, if used. All keys live in the host's secret store, never in the repo or chat. Separate keys for testnet and mainnet. Testnet guided-mode demo keys are testnet only.
 10. **Web.** NEP-413 sessions, CSRF protection on mutating routes, Telegram webhook secret, rate limits on `/pay/*/quote` and `/invoices/draft`, PDF size and type checks.
 11. **Demo honesty.** The demo clock, sample entities, team-seeded pool and team-run track record are all labelled on screen.
 
@@ -858,7 +858,7 @@ The user message has three parts: `FORM_FIELDS` (JSON), `INVOICE_TEXT`, and opti
 | 1Click payments: test $1 + about $20 of payments from Base | $21 USDC + 0.2% fee (no partner key) ≈ $0.05 + Base gas < $1 | Mostly (the team is both buyer and exporter) |
 | Buyer Base wallet top-up (USDC + a little ETH for gas) | ≈ $25, covers the line above | Mostly |
 | NEAR AI inference | Covered by the $10 NEAR Builders credit (estimate) | – |
-| Telegram, hosting, domain | $0 (existing VPS and domain) | – |
+| Telegram, hosting, domain | $0 (existing hosting and domain) | – |
 | **Cash needed up front** | **≈ $65–80** | **Most comes back; at risk ≈ $25–35 (storage, gas, fees)** |
 
 Nothing is spent without the owner's explicit OK.
@@ -923,7 +923,7 @@ Nothing is spent without the owner's explicit OK.
 | **Wed 11 Nov, evening** | FrontDesk Part B first (due 23:00). No Tradewind code until spec sign-off | Spec review with the owner; apply changes; name decision; prepare sample invoice PDF + B/L (SAMPLE watermark) | **the owner signs off the spec** |
 | **Thu 12 Nov, morning–afternoon** | Repo scaffold (private, `dev-salami`); contract step 1 (all of §6) + unit tests + near-workspaces flow; testnet deploy with mock USDC; 1Click `dry:true` quotes; **Path A $1 test (needs OK)** | Nudgeboard first (due 21:00). Then README skeleton with "do X → see Y", labels list, Telegram copy, X post draft | Contract tests green; Path A/B decision by **Thu 22:00** |
 | **Thu 12 Nov, night** | NEAR AI check end-to-end on testnet (step 2) | Demo script v2; video shot list | – |
-| **Fri 13 Nov** | Frontend screens (step 3); pay page + chosen settlement path (step 4); track record UI (5); twPOOL surface (6); Telegram bot (7); deploy to `tradewind.181labs.build` (DNS + Traefik, **never restart coolify-proxy**) | Rehearse the full loop on testnet; README steps tested from a clean clone; screenshots; Q-015 disclosure check | Full testnet loop works in the hosted app by **Fri 23:00** |
+| **Fri 13 Nov** | Frontend screens (step 3); pay page + chosen settlement path (step 4); track record UI (5); twPOOL surface (6); Telegram bot (7); deploy to `tradewind.181labs.build` (DNS + reverse proxy) | Rehearse the full loop on testnet; README steps tested from a clean clone; screenshots; Q-015 disclosure check | Full testnet loop works in the hosted app by **Fri 23:00** |
 | **Sat 14 Nov, 08:00–12:00** | Demo clock/labels/sandbox/ops (8); **mainnet deploy (needs OK)**; storage registration; pool seed; 4 seed invoices; local demo script | Collect tx links into README; final copy | Mainnet loop works once |
 | **Sat 12:00–15:00** | **Partial payments UX (10)** if 1–9 are done; go/no-go at **14:00** | Record raw demo footage (2 takes) | – |
 | **Sat 15:00–18:00** | Fixes only; **code freeze 18:00** | Edit demo video (≤ 3 min) + 1:1 cut; final README; draft X post for the owner; build the submission payload | – |
@@ -1034,7 +1034,7 @@ Cut order if behind (cut the first item first): S1–S3 → LP share-price chart
 7. **Q7:** Add the `nfts` track too? The invoice NFT holds repayment state but doesn't own funds itself (the contract does), so the fit is fair but not strong.
 8. **Q8:** Repo name: `tradewind` (or the final name) under `dev-salami`?
 9. **Q9:** Should buyers get reminders by email too? Out of scope for now; Telegram + log only.
-10. **Q10:** Postgres or SQLite on the VPS (Dev's call)?
+10. **Q10:** Postgres or SQLite on the host (Dev's call)?
 
 ---
 

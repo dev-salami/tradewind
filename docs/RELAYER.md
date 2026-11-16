@@ -25,7 +25,7 @@ NEAR_NETWORK=sandbox
 NEAR_RPC_URL=http://127.0.0.1:3039
 CORE_CONTRACT_ID=core.test.near
 USDC_CONTRACT_ID=usdc.test.near
-DATABASE_PATH=/tmp/opencode/relayer.db
+DATABASE_PATH=/tmp/tradewind/relayer.db
 ONECLICK_SIMULATOR=1
 ONECLICK_BASE_URL=http://127.0.0.1:4444
 ```
@@ -89,20 +89,18 @@ required). These commands create only throwaway localhost accounts. Do not
 reuse a validator home from another environment.
 
 ```sh
-export PATH=/opt/node-v22.23.4/bin:$PATH
-mkdir -p /tmp/opencode/relayer-sandbox
-near-sandbox --home /tmp/opencode/relayer-sandbox init
-near-sandbox --home /tmp/opencode/relayer-sandbox run --rpc-addr 127.0.0.1:3039
+mkdir -p /tmp/tradewind/relayer-sandbox
+near-sandbox --home /tmp/tradewind/relayer-sandbox init
+near-sandbox --home /tmp/tradewind/relayer-sandbox run --rpc-addr 127.0.0.1:3039
 ```
 
 In a second terminal, from the repository root, once RPC is ready:
 
 ```sh
-export PATH=/opt/node-v22.23.4/bin:$PATH
 make build
-node scripts/e2e-sandbox-setup.mjs /tmp/opencode/relayer-sandbox http://127.0.0.1:3039 /tmp/opencode/relayer-sandbox.env
-node scripts/e2e-relayer.mjs /tmp/opencode/relayer-sandbox /tmp/opencode/relayer-sandbox.env
-node scripts/e2e-relayer.mjs /tmp/opencode/relayer-sandbox /tmp/opencode/relayer-sandbox.env
+node scripts/e2e-sandbox-setup.mjs /tmp/tradewind/relayer-sandbox http://127.0.0.1:3039 /tmp/tradewind/relayer-sandbox.env
+node scripts/e2e-relayer.mjs /tmp/tradewind/relayer-sandbox /tmp/tradewind/relayer-sandbox.env
+node scripts/e2e-relayer.mjs /tmp/tradewind/relayer-sandbox /tmp/tradewind/relayer-sandbox.env
 ```
 
 The setup writes a mode-0600 local env file. The runner reads it, refuses any
